@@ -4,7 +4,7 @@
 
 CPWE is a mod for Kerbal Space Program designed to provide a framework for defining wind patterns for any celestial body, including custom/modded ones. 
 
-In all the time I spent on flight simulators, wind was always a persistent challenge element, and I've wanted something similar in KSP. However, none of the (admittedly very few) existing wind mods for KSP had what I wanted. Namely, I wanted to be able to configure the wind based on location to allow for interesting wind patterns rather than a purely randomized system. At the same time, while I loved the depth that Kerbal Weather Project brought to the game, I felt that running a climate simulation for the other planets might be a bridge too far. 
+In all the time I spent on flight simulators, wind was always a persistent challenge element, and I've wanted something similar in KSP. However, none of the (admittedly very few) existing wind mods for KSP had what I wanted. Namely, I wanted to be able to configure the wind based on location to allow for interesting wind patterns. At the same time, while I loved the depth that Kerbal Weather Project brought to the game, I felt that running a climate simulation for other celestial bodies might be a bridge too far (especially if we include custom bodies which may not necessarily be grounded in reality). 
 
 CPWE is my attempt at filling the need I created for myself. It is designed to be relatively easy to configure and provides a lot of options for configuring wind patterns and prevailing winds. The structure of the config entries are included on this repository's wiki page. 
 
