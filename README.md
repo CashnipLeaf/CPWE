@@ -13,6 +13,7 @@ An API will be included to allow other mods to not only retrieve the wind vector
 
 ### Planned Features (in order of priority):
 - More advanced options for defining wind patterns, such as using float curves
+- FAR compatibility
 - Support for dynamic wind patterns
 - The aforementioned API
 - Integration with other mods
@@ -30,14 +31,12 @@ An API will be included to allow other mods to not only retrieve the wind vector
 - KSPCommunityFixes
 - ModuleManager
 
-**Integration with:**
-- FerramAerospaceResearch (Untested)
-
-**Compatible with:**  
+**Compatible With:**
+- FerramAerospaceResearch (Planned) 
 - Most, if not all parts mods
 
-**Conflicts with:** 
-- Mods that modify the stock aerodynamics system
+**Conflicts With:** 
+- Other mods that modify the stock aerodynamics system
 
 **Support:**  
 As this is an alpha release, I fully expect there to be bugs and issues that I may have missed during testing. Please report these on the Issues tab.
