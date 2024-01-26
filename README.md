@@ -34,7 +34,7 @@ As this is an alpha release, I fully expect there to be bugs and issues that I m
 
 **Credits and Acknowledgements (not necessarily in order of contribution):**
 - @sarbian, @ferram4, and @Starwaster for making the Modular Flight Integrator that allows interfacing with KSP's physics system.
-- @cmet24 for making Kerbal Weather Project (https://forum.kerbalspaceprogram.com/topic/199347-18x-111x-kerbal-weather-project-kwp-v100/), which was a big source of inspiration for this mod.
+- @cmac994 for making Kerbal Weather Project (https://forum.kerbalspaceprogram.com/topic/199347-18x-111x-kerbal-weather-project-kwp-v100/), which was a big source of inspiration for this mod.
 
 **License Information:**
 - The source code, settings config, localization configs, and toolbar icons are licensed under the MIT license. (see the LICENSE file)
