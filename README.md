@@ -5,7 +5,7 @@ In all the time I spent on flight simulators, wind was always a persistent chall
 
 CPWE is my attempt at filling the need I created for myself. It is designed to be relatively easy to configure and provides a lot of options for configuring wind patterns and prevailing winds. The structure of the config entries all included on CPWE's github wiki page. 
 
-API
+**API**  
 An API will be included to allow other mods to not only retrieve the wind vector that CPWE is using, but supply CPWE with their own wind vectors. Details on this are not yet finalized, but once the API is active, instructions on how to interface with it will be included in the Github wiki
 
 NOTE: CPWE does NOT add any visual effects. However, it's likely possible to integrate this mod with one that does.
