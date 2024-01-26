@@ -7,7 +7,7 @@ namespace CPWE
 {
     internal static class Utils //this class contains a bunch of helper and utility functions
     {
-        internal const string version = "ALPHA v0.8.0";
+        internal const string version = "v0.8.0-alpha";
 
         //------------------------------LOGGING FUNCTIONS--------------------------------
         //General information
