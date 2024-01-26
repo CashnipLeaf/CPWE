@@ -1,6 +1,6 @@
 # CPWE - Configurable Planetary Wind Effects
 
-**NOTE:** This mod is under active development. Anything and everything here is subject to change.
+### This mod is under active development. Everything in here is subject to change.
 
 CPWE is a mod for Kerbal Space Program designed to provide a framework for defining wind patterns for any celestial body, including custom/modded ones. 
 
@@ -8,13 +8,13 @@ In all the time I spent on flight simulators, wind was always a persistent chall
 
 CPWE is my attempt at filling the need I created for myself. It is designed to be relatively easy to configure and provides a lot of options for configuring wind patterns and prevailing winds. The structure of the config entries are included on this repository's wiki page. 
 
-### API  
+### API (Coming Soon)  
 An API will be included to allow other mods to not only retrieve the wind vector that CPWE is using, but supply CPWE with their own wind vectors. Details on this are not yet finalized, but once the API is active, instructions on how to interface with it will be included in the Github wiki
 
 ### Planned Features (in order of priority):
 - More advanced options for defining wind patterns, such as using float curves
 - FAR compatibility
-- Support for dynamic wind patterns
+- Support for dynamic wind patterns (i.e. ones that can change with time)
 - The aforementioned API
 - Integration with other mods
 
