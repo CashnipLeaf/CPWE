@@ -275,15 +275,17 @@ namespace CPWE
         internal FloatCurve WindSpeedTimeCurve;
         internal FloatCurve AltitudeSpeedMultCurve;
         internal Texture2D flowmap;
+        internal float vWindMultiplier;
 
         internal int x;
         internal int y;
 
-        internal FlowMap(FloatCurve windspd, Texture2D path, FloatCurve altmultcurve, bool use3rdChannel)
+        internal FlowMap(FloatCurve windspd, Texture2D path, FloatCurve altmultcurve, bool use3rdChannel, float vWindMultiplier)
         {
             WindSpeedTimeCurve = windspd;
             AltitudeSpeedMultCurve = altmultcurve;
             useThirdChannel = use3rdChannel;
+            this.vWindMultiplier = vWindMultiplier;
 
             flowmap = path;
             x = flowmap.width; 
@@ -341,7 +343,7 @@ namespace CPWE
 
                     windvec.z = (r * 2.0f) - 1.0f;
                     windvec.x = (g * 2.0f) - 1.0f;
-                    if (useThirdChannel) { windvec.y = (b * 2.0f) - 1.0f; }
+                    if (useThirdChannel) { windvec.y = ((b * 2.0f) - 1.0f) * vWindMultiplier; }
                     vectors[i] = windvec;
                 }
                 return Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy) * windspeed;

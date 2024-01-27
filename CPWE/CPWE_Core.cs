@@ -263,10 +263,10 @@ namespace CPWE
             //saved = cn.TryGetNode("RadiusCurve", ref FloatCurveHolder); //Multiplier for the width of the current as a function of longitude/latitude. used by jetstream and polarstream
             FloatCurve RadiusCurve = CheckCurve(FloatCurveHolder, radius, saved);
 
-            //saved = cn.TryGetNode("LonTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
+            //saved = cn.TryGetNode("LongitudeTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LonTimeCurve = CheckCurve(FloatCurveHolder, lon, saved);
 
-            //saved = cn.TryGetNode("LatTimeCurve", ref FloatCurveHolder); //latitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
+            //saved = cn.TryGetNode("LatitudeTimeCurve", ref FloatCurveHolder); //latitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LatTimeCurve = CheckCurve(FloatCurveHolder, lat, saved);
 
             //saved = cn.TryGetNode("WindSpeedTimeCurve", ref FloatCurveHolder); //wind speed as a function of time. used by all wind patterns
@@ -279,13 +279,13 @@ namespace CPWE
             FloatCurve LongitudeCurve = CheckCurve(FloatCurveHolder, lon, saved);
 
             saved = false;
-            //saved = cn.TryGetNode("LonLatSpeedMultCurve", ref FloatCurveHolder); //wind speed multiplier as a function of longitude/latitude. used by jetstream and polarstream
+            //saved = cn.TryGetNode("LonLatSpeedMultiplierCurve", ref FloatCurveHolder); //wind speed multiplier as a function of longitude/latitude. used by jetstream and polarstream
             FloatCurve LonLatSpeedMultCurve = CheckCurve(FloatCurveHolder, 1.0f, saved);
 
-            //saved = cn.TryGetNode("RadiusSpeedMultCurve", ref FloatCurveHolder); //wind speed multiplier as a function of the fraction of the distance to the center of the current (0 = dead center, 1 = edge of current). used by all wind types
+            //saved = cn.TryGetNode("RadiusSpeedMultiplierCurve", ref FloatCurveHolder); //wind speed multiplier as a function of the fraction of the distance to the center of the current (0 = dead center, 1 = edge of current). used by all wind types
             FloatCurve RadiusSpeedMultCurve = CheckCurve(FloatCurveHolder, 1.0f, saved);
 
-            bool altmult = cn.TryGetNode("AltitudeSpeedMultCurve", ref FloatCurveHolder);
+            bool altmult = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref FloatCurveHolder);
             FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(FloatCurveHolder, altmult, minalt, maxalt);
 
             FloatCurveHolder = null;
@@ -329,6 +329,7 @@ namespace CPWE
             float minalt = 0.0f; //support wind currents affecting splashed craft
             float maxalt = 1000000000.0f; //1Gm. If you somehow have an atmosphere taller than this, you need professional help.
             float windSpeed = 0.0f;
+            float vWindMult = 1.0f;
             string map = "";
 
             ConfigNode floaty = new ConfigNode();
@@ -337,6 +338,7 @@ namespace CPWE
             cn.TryGetValue("minAlt", ref minalt);
             cn.TryGetValue("maxAlt", ref maxalt);
             cn.TryGetValue("windSpeed", ref windSpeed);
+            cn.TryGetValue("verticalWindMultiplier", ref vWindMult);
             cn.TryGetValue("map", ref map);
 
             List<float> floats = new List<float> { minalt, maxalt, windSpeed };
@@ -357,14 +359,14 @@ namespace CPWE
                 throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct.");
             }
             
-            bool curveExists = cn.TryGetNode("WindSpeedTimeCurve", ref floaty);
-            FloatCurve WindSpeedTimeCurve = CheckCurve(floaty, windSpeed, curveExists);
+            //bool curveExists = cn.TryGetNode("WindSpeedTimeCurve", ref floaty);
+            FloatCurve WindSpeedTimeCurve = CheckCurve(floaty, windSpeed, false);
 
-            bool altmult = cn.TryGetNode("AltitudeSpeedMultCurve", ref floaty);
+            bool altmult = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref floaty);
             FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(floaty, altmult, minalt, maxalt);
             
             Texture2D flowmap = LoadTexFromImage(Utils.gameDataPath + map);
-            return new FlowMap(WindSpeedTimeCurve, flowmap, AltitudeSpeedMultCurve, thirdchannel);
+            return new FlowMap(WindSpeedTimeCurve, flowmap, AltitudeSpeedMultCurve, thirdchannel, vWindMult);
         }
 
         //Creates the float curve, or if one isnt available, converts a relevant float value into one.
@@ -373,7 +375,7 @@ namespace CPWE
             FloatCurve curve = new FloatCurve();
             if (saved)
             {
-                curve.Save(node);
+                curve.Load(node);
             }
             else
             {
@@ -389,7 +391,7 @@ namespace CPWE
             FloatCurve curve = new FloatCurve();
             if (saved)
             {
-                curve.Save(node);
+                curve.Load(node);
             }
             //generate a default AltitudeSpeedMultCurve if one isn't inputted.
             else
