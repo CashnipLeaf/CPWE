@@ -27,7 +27,7 @@ namespace CPWE
         public static Vector3 GetWindData(CelestialBody cb, Part p, Vector3 pos)
         {
             if (core == null) { return Vector3.zero; }
-            return core.GetTheWind(cb, p, pos);
+            return core.GetCachedWind();
         }
 
         /*--------------------------EXTERNAL WIND DATA SOURCES--------------------------

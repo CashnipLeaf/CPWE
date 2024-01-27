@@ -23,6 +23,7 @@ namespace CPWE
         internal CPWE_Core Core;
         private Vector3 internalwindvec = Vector3.zero;
         private Vector3 appliedwindvec = Vector3.zero;
+        private Vector3 multipliedwindvec = Vector3.zero;
         private Vector3 finalwindvec = Vector3.zero; //the actual wind vector being applied to the craft, after being multiplied by the wind speed multiplier.
         private bool haswind = false;
 
@@ -121,6 +122,7 @@ namespace CPWE
             haswind = Core.haswind;
             appliedwindvec = Core.GetCachedWind();
             internalwindvec = inverseworldframe * appliedwindvec;
+            multipliedwindvec = internalwindvec * Utils.GlobalWindSpeedMultiplier;
             finalwindvec = appliedwindvec * Utils.GlobalWindSpeedMultiplier;
 
             craftdragvectorwind = refpart.dragVector;
@@ -153,18 +155,18 @@ namespace CPWE
             TAS = string.Format("{0:F1} {1}", craftdragvectorwind.magnitude, Localizer.Format(speedunit));
             mach = string.Format("{0:F2}", activevessel.mach);
 
-            windspeed = string.Format("{0:F1} {1}", internalwindvec.magnitude, Localizer.Format(speedunit));
-            v_windspeed = string.Format("{0:F1} {1}", internalwindvec.y, Localizer.Format(speedunit));
-            h_windspeed = string.Format("{0:F1} {1}", Math.Sqrt(Math.Pow(internalwindvec.x,2) + Math.Pow(internalwindvec.z, 2)), Localizer.Format(speedunit));
+            windspeed = string.Format("{0:F1} {1}", multipliedwindvec.magnitude, Localizer.Format(speedunit));
+            v_windspeed = string.Format("{0:F1} {1}", multipliedwindvec.y, Localizer.Format(speedunit));
+            h_windspeed = string.Format("{0:F1} {1}", Math.Sqrt(Math.Pow(multipliedwindvec.x,2) + Math.Pow(multipliedwindvec.z, 2)), Localizer.Format(speedunit));
 
-            if (internalwindvec.x == 0.0 && internalwindvec.z == 0.0)
+            if (multipliedwindvec.x == 0.0 && multipliedwindvec.z == 0.0)
             {
                 windheading = GetLOC("#LOC_CPWE_na");
                 winddirection = GetLOC("#LOC_CPWE_na");
             }
             else
             {
-                heading = ((Math.Atan2(internalwindvec.z, internalwindvec.x) * Utils.radtodeg) + 180.0) % 360.0;
+                heading = ((Math.Atan2(multipliedwindvec.z, multipliedwindvec.x) * Utils.radtodeg) + 180.0) % 360.0;
                 windheading = string.Format("{0:F1} {1}", heading, Localizer.Format(degreesstr));
                 winddirection = CardinalDirection(heading);
             }            
@@ -221,6 +223,7 @@ namespace CPWE
                 DrawElement("Wind Data Source", Core.source); //Data source
                 DrawElement("Connected to FAR", Utils.FARConnected.ToString()); //connected to FAR
                 DrawElement("Body Internal Name", mainbody.name); //internal name of the current celestial body
+                DrawElement("Wind Speed Multiplier", string.Format("{0:F2}", Utils.GlobalWindSpeedMultiplier));
                 DrawElement("Wind Vector (Vessel)", internalwindvec.ToString()); //wind vector retrieved from the wind objects
                 DrawElement("Wind Vector (World)", appliedwindvec.ToString()); //wind vector after being transformed relative to the craft's frame of reference
                 DrawElement("Wind Vector (Applied to Vessel)", finalwindvec.ToString()); //wind vector after being multiplied by the wind speed multiplier

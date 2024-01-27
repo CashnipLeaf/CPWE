@@ -209,7 +209,7 @@ namespace CPWE
             Destroy(this);
         }
 
-        internal Vector3 GetTheWind(CelestialBody body, Part p, Vector3 pos) { return windVec; }
+        internal Vector3 GetTheWind(CelestialBody body, Part p, Vector3 pos) { return windVec * Utils.GlobalWindSpeedMultiplier; }
         internal Vector3 GetCachedWind() { return windVec; }
 
         //------------------------------CONFIG INTERPRETERS-------------------------
