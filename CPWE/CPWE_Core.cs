@@ -96,7 +96,7 @@ namespace CPWE
                                 }
                                 catch (Exception ex)
                                 {
-                                    Utils.LogWarning("Unable to Wind object: " + ex.Message);
+                                    Utils.LogWarning("Unable to load Wind object: " + ex.Message);
                                 }
                             }
                         }
@@ -329,8 +329,11 @@ namespace CPWE
             float minalt = 0.0f; //support wind currents affecting splashed craft
             float maxalt = 1000000000.0f; //1Gm. If you somehow have an atmosphere taller than this, you need professional help.
             float windSpeed = 0.0f;
-            float vWindMult = 1.0f;
+            float EWwind = 0.0f;
+            float NSwind = 0.0f;
+            float vWind = 0.0f;
             string map = "";
+            bool curveExists = false;
 
             ConfigNode floaty = new ConfigNode();
 
@@ -338,10 +341,12 @@ namespace CPWE
             cn.TryGetValue("minAlt", ref minalt);
             cn.TryGetValue("maxAlt", ref maxalt);
             cn.TryGetValue("windSpeed", ref windSpeed);
-            cn.TryGetValue("verticalWindMultiplier", ref vWindMult);
+            if (!cn.TryGetValue("eastWestWindSpeed", ref EWwind)) { EWwind = windSpeed; }
+            if (!cn.TryGetValue("northSouthWindSpeed", ref NSwind)) { NSwind = windSpeed; }
+            if (!cn.TryGetValue("verticalWindSpeed", ref vWind)) { vWind = windSpeed; }
             cn.TryGetValue("map", ref map);
 
-            List<float> floats = new List<float> { minalt, maxalt, windSpeed };
+            List<float> floats = new List<float> { minalt, maxalt, windSpeed, EWwind, NSwind, vWind };
             if (floats.Any(f => float.IsNaN(f) || float.IsInfinity(f)))
             {
                 throw new Exception("One or more of the inputted float fields returned NaN or Infinity.");
@@ -359,14 +364,23 @@ namespace CPWE
                 throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct.");
             }
             
-            //bool curveExists = cn.TryGetNode("WindSpeedTimeCurve", ref floaty);
-            FloatCurve WindSpeedTimeCurve = CheckCurve(floaty, windSpeed, false);
+            //curveExists = cn.TryGetNode("WindSpeedMultiplierTimeCurve", ref floaty);
+            FloatCurve WindSpeedTimeCurve = CheckCurve(floaty, 1.0f, curveExists);
+
+            //curveExists = cn.TryGetNode("NSSpeedTimeCurve", ref floaty);
+            FloatCurve EWSpeedTimeCurve = CheckCurve(floaty, EWwind, curveExists);
+
+            //curveExists = cn.TryGetNode("EWSpeedTimeCurve", ref floaty);
+            FloatCurve NSSpeedTimeCurve = CheckCurve(floaty, NSwind, curveExists);
+
+            //curveExists = cn.TryGetNode("VerticalSpeedTimeCurve", ref floaty);
+            FloatCurve VSpeedTimeCurve = CheckCurve(floaty, vWind, curveExists);
 
             bool altmult = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref floaty);
             FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(floaty, altmult, minalt, maxalt);
             
             Texture2D flowmap = LoadTexFromImage(Utils.gameDataPath + map);
-            return new FlowMap(WindSpeedTimeCurve, flowmap, AltitudeSpeedMultCurve, thirdchannel, vWindMult);
+            return new FlowMap(WindSpeedTimeCurve, flowmap, AltitudeSpeedMultCurve, thirdchannel, EWSpeedTimeCurve, NSSpeedTimeCurve, VSpeedTimeCurve);
         }
 
         //Creates the float curve, or if one isnt available, converts a relevant float value into one.
@@ -396,19 +410,19 @@ namespace CPWE
             //generate a default AltitudeSpeedMultCurve if one isn't inputted.
             else
             {
-                float fade = Math.Min(1000.0f, (max - min) / 10);
+                float fade = Math.Min(1000.0f, (max - min) / 10.0f);
                 if(min <= 0.0f)
                 {
-                    curve.Add(min - fade, 0, 0, 1 / fade);
-                    curve.Add(min, 1, 1 / fade, 0);
+                    curve.Add(min - fade, 0.0f, 0.0f, 1.0f / fade);
+                    curve.Add(min, 1.0f, 1.0f / fade, 0.0f);
                 }
                 else
                 {
-                    curve.Add(min, 0, 0, 1 / fade);
-                    curve.Add(min + fade, 1, 1 / fade, 0);
+                    curve.Add(min, 0.0f, 0.0f, 1.0f / fade);
+                    curve.Add(min + fade, 1.0f, 1.0f / fade, 0.0f); 
                 }
-                curve.Add(max - fade, 1, 0, -1 / fade);
-                curve.Add(min, 0, -1 / fade, 0);
+                curve.Add(max - fade, 1.0f, 0.0f, -1.0f / fade);
+                curve.Add(max, 0.0f, -1.0f / fade, 0.0f);
             }
             return curve;
         }

@@ -77,6 +77,7 @@ namespace CPWE
                 {
                     if (m is ModuleLiftingSurface wing)
                     {
+                        if (part.name.Contains("kerbalEVA")) { continue; }
                         double Q = part.dynamicPressurekPa * 1000.0;
                         wing.SetupCoefficients(wing.part.dragVector, out Vector3 nVel, out Vector3 liftvector, out float liftDot, out float absdot);
                         LiftForce += wing.GetLiftVector(liftvector, liftDot, absdot, Q, machNumber);
@@ -131,6 +132,7 @@ namespace CPWE
                 {
                     if (m is ModuleLiftingSurface wing)
                     {
+                        if (part.name.Contains("kerbalEVA")) { continue; }
                         double Q2 = part.dynamicPressurekPa * 1000.0;
                         wing.SetupCoefficients(WindDragVector, out Vector3 nVel, out Vector3 liftvector, out float liftDot, out float absdot);
                         LiftForceWithWind += wing.GetLiftVector(liftvector, liftDot, absdot, Q2, (float)fi.mach);

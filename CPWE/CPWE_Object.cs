@@ -272,20 +272,24 @@ namespace CPWE
     internal class FlowMap
     {
         internal bool useThirdChannel; //whether or not to use the Blue channel to add a vertical component to the winds.
-        internal FloatCurve WindSpeedTimeCurve;
+        internal FloatCurve WindSpeedMultiplierTimeCurve;
         internal FloatCurve AltitudeSpeedMultCurve;
         internal Texture2D flowmap;
-        internal float vWindMultiplier;
+        internal FloatCurve EWwind;
+        internal FloatCurve NSwind;
+        internal FloatCurve vWind;
 
         internal int x;
         internal int y;
 
-        internal FlowMap(FloatCurve windspd, Texture2D path, FloatCurve altmultcurve, bool use3rdChannel, float vWindMultiplier)
+        internal FlowMap(FloatCurve windspd, Texture2D path, FloatCurve altmultcurve, bool use3rdChannel, FloatCurve EWwind, FloatCurve NSwind, FloatCurve vWind)
         {
-            WindSpeedTimeCurve = windspd;
+            WindSpeedMultiplierTimeCurve = windspd;
             AltitudeSpeedMultCurve = altmultcurve;
             useThirdChannel = use3rdChannel;
-            this.vWindMultiplier = vWindMultiplier;
+            this.EWwind = EWwind;
+            this.NSwind = NSwind;
+            this.vWind = vWind;
 
             flowmap = path;
             x = flowmap.width; 
@@ -301,8 +305,8 @@ namespace CPWE
 
         internal Vector3 GetWindVec(double lon, double lat, double alt)
         {
-            float windspeed = Math.Abs(Utils.GetValAtLoopTime(WindSpeedTimeCurve) * AltitudeSpeedMultCurve.Evaluate((float)alt));
-            if (windspeed > 0.0f)
+            float windspeedmult = Math.Abs(Utils.GetValAtLoopTime(WindSpeedMultiplierTimeCurve) * AltitudeSpeedMultCurve.Evaluate((float)alt));
+            if (windspeedmult > 0.0f)
             {
                 //adjust longitude so the center of the map is the prime meridian for the purposes of these calculations
                 lon += 90;
@@ -320,8 +324,6 @@ namespace CPWE
                 double lerpy = mapy - Math.Truncate(mapy);
 
                 //locate the four nearby points, but don't go over the poles.
-                //a "+x" is used in the x values to avoid taking the modulus of a negative number,
-                //which returns a negative number and would cause an out-of-bounds exception in Texture2D.GetPixel
                 int leftx = (int)(Math.Truncate(mapx) + x) % x;
                 int topy = Math.Max(0, (int)Math.Truncate(mapy));
                 int rightx = (int)(Math.Truncate(mapx) + 1 + x) % x;
@@ -343,12 +345,22 @@ namespace CPWE
 
                     windvec.z = (r * 2.0f) - 1.0f;
                     windvec.x = (g * 2.0f) - 1.0f;
-                    if (useThirdChannel) { windvec.y = ((b * 2.0f) - 1.0f) * vWindMultiplier; }
+                    if (useThirdChannel) { windvec.y = (b * 2.0f) - 1.0f; }
                     vectors[i] = windvec;
                 }
-                return Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy) * windspeed;
+                Vector3 wind = Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy) * windspeedmult;
+                return new Vector3(wind.x * Math.Abs(Utils.GetValAtLoopTime(NSwind)), wind.y * Math.Abs(Utils.GetValAtLoopTime(vWind)), wind.z * Math.Abs(Utils.GetValAtLoopTime(EWwind)));
             }
             return Vector3.zero;
+        }
+    }
+
+    //finish this, you dummy
+    internal class FlowMapStack
+    {
+        internal FlowMapStack()
+        {
+
         }
     }
 }
