@@ -13,7 +13,6 @@ An API will be included to allow other mods to not only retrieve the wind vector
 
 ### Planned Features (in order of priority):
 - More advanced options for defining wind patterns, such as using float curves
-- FAR compatibility
 - Support for dynamic wind patterns (i.e. ones that can change with time)
 - The aforementioned API
 - Integration with other mods
@@ -32,7 +31,7 @@ An API will be included to allow other mods to not only retrieve the wind vector
 - ModuleManager
 
 **Compatible With:**
-- FerramAerospaceResearch (Planned) 
+- FerramAerospaceResearch
 - Most, if not all parts mods
 
 **Conflicts With:** 
