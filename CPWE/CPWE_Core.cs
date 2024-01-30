@@ -264,6 +264,7 @@ namespace CPWE
             curveExists = cn.TryGetNode("RadiusCurve", ref FloatCurveHolder); //Width of the current as a function of longitude/latitude. used by jetstream and polarstream
             FloatCurve RadiusCurve = CheckCurve(FloatCurveHolder, radius, curveExists);
 
+            curveExists = false;
             //curveExists = cn.TryGetNode("LongitudeTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LonTimeCurve = CheckCurve(FloatCurveHolder, lon, curveExists);
 
