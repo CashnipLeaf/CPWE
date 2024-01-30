@@ -5,7 +5,7 @@ using UnityEngine;
 namespace CPWE
 {
     //the object used to store wind pattern data
-    internal class CPWE_Object : MonoBehaviour
+    internal class CPWE_Object
     {
         private readonly Dictionary<string, CPWE_Body> Bodies;
         internal CPWE_Object()
@@ -136,7 +136,7 @@ namespace CPWE
 
         internal override Vector3 GetWindVec(double lon, double lat, double alt)
         {
-            double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LatitudeCurve.Evaluate((float)lat), lat) / (RadiusCurve.Evaluate((float)lon));
+            double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LatitudeCurve.Evaluate((float)lat), lat) / Math.Max(RadiusCurve.Evaluate((float)lon), 0.0f);
             float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
             if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, longitude, longitude + length)) && speed != 0.0f)
             {
@@ -170,7 +170,7 @@ namespace CPWE
 
         internal override Vector3 GetWindVec(double lon, double lat, double alt)
         {
-            double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LongitudeCurve.Evaluate((float)lat), lat) / (RadiusCurve.Evaluate((float)lat));
+            double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LongitudeCurve.Evaluate((float)lat), lat) / Math.Max(RadiusCurve.Evaluate((float)lat), 0.0f);
             float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
             if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, latitude, latitude + length)) && speed != 0.0f)
             {
@@ -271,10 +271,12 @@ namespace CPWE
 
     internal class FlowMap
     {
-        internal bool useThirdChannel; //whether or not to use the Blue channel to add a vertical component to the winds.
-        internal FloatCurve WindSpeedMultiplierTimeCurve;
-        internal FloatCurve AltitudeSpeedMultCurve;
         internal Texture2D flowmap;
+        internal bool useThirdChannel; //whether or not to use the Blue channel to add a vertical component to the winds.
+        internal FloatCurve AltitudeSpeedMultCurve;
+        internal FloatCurve EWAltitudeSpeedMultCurve;
+        internal FloatCurve NSAltitudeSpeedMultCurve;
+        internal FloatCurve VAltitudeSpeedMultCurve;
         internal FloatCurve EWwind;
         internal FloatCurve NSwind;
         internal FloatCurve vWind;
@@ -282,16 +284,18 @@ namespace CPWE
         internal int x;
         internal int y;
 
-        internal FlowMap(FloatCurve windspd, Texture2D path, FloatCurve altmultcurve, bool use3rdChannel, FloatCurve EWwind, FloatCurve NSwind, FloatCurve vWind)
+        internal FlowMap(Texture2D path, bool use3rdChannel, FloatCurve altmult, FloatCurve ewaltmultcurve, FloatCurve nsaltmultcurve, FloatCurve valtmultcurve, FloatCurve EWwind, FloatCurve NSwind, FloatCurve vWind)
         {
-            WindSpeedMultiplierTimeCurve = windspd;
-            AltitudeSpeedMultCurve = altmultcurve;
+            flowmap = path;
             useThirdChannel = use3rdChannel;
+            AltitudeSpeedMultCurve = altmult;
+            EWAltitudeSpeedMultCurve = ewaltmultcurve;
+            NSAltitudeSpeedMultCurve = nsaltmultcurve;
+            VAltitudeSpeedMultCurve= valtmultcurve;
             this.EWwind = EWwind;
             this.NSwind = NSwind;
             this.vWind = vWind;
 
-            flowmap = path;
             x = flowmap.width; 
             y = flowmap.height;
         }
@@ -305,12 +309,13 @@ namespace CPWE
 
         internal Vector3 GetWindVec(double lon, double lat, double alt)
         {
-            float windspeedmult = Math.Abs(Utils.GetValAtLoopTime(WindSpeedMultiplierTimeCurve) * AltitudeSpeedMultCurve.Evaluate((float)alt));
-            if (windspeedmult > 0.0f)
+            //AltitudeSpeedMultiplierCurve cannot go below 0.
+            float altmult = Math.Max(AltitudeSpeedMultCurve.Evaluate((float)alt), 0.0f);
+            if(altmult > 0.0f)
             {
                 //adjust longitude so the center of the map is the prime meridian for the purposes of these calculations
                 lon += 90;
-                if(lon > 180)
+                if (lon > 180)
                 {
                     lon -= 360;
                 }
@@ -327,11 +332,11 @@ namespace CPWE
                 int leftx = (int)(Math.Truncate(mapx) + x) % x;
                 int topy = Math.Max(0, (int)Math.Truncate(mapy));
                 int rightx = (int)(Math.Truncate(mapx) + 1 + x) % x;
-                int bottomy = Math.Min((int)(Math.Truncate(mapy) + 1), y-1);
+                int bottomy = Math.Min((int)(Math.Truncate(mapy) + 1), y - 1);
 
                 Color[] colors = new Color[4];
                 Vector3[] vectors = new Vector3[4];
-                colors[0] = flowmap.GetPixel(leftx,topy);
+                colors[0] = flowmap.GetPixel(leftx, topy);
                 colors[1] = flowmap.GetPixel(rightx, topy);
                 colors[2] = flowmap.GetPixel(leftx, bottomy);
                 colors[3] = flowmap.GetPixel(rightx, bottomy);
@@ -348,8 +353,11 @@ namespace CPWE
                     if (useThirdChannel) { windvec.y = (b * 2.0f) - 1.0f; }
                     vectors[i] = windvec;
                 }
-                Vector3 wind = Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy) * windspeedmult;
-                return new Vector3(wind.x * Math.Abs(Utils.GetValAtLoopTime(NSwind)), wind.y * Math.Abs(Utils.GetValAtLoopTime(vWind)), wind.z * Math.Abs(Utils.GetValAtLoopTime(EWwind)));
+                Vector3 wind = Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy);
+                wind.x = wind.x * Utils.GetValAtLoopTime(NSwind) * NSAltitudeSpeedMultCurve.Evaluate((float)alt);
+                wind.y = wind.y * Utils.GetValAtLoopTime(vWind) * VAltitudeSpeedMultCurve.Evaluate((float)alt);
+                wind.z = wind.z * Utils.GetValAtLoopTime(EWwind) * EWAltitudeSpeedMultCurve.Evaluate((float)alt);
+                return wind * altmult;
             }
             return Vector3.zero;
         }

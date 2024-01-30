@@ -212,23 +212,11 @@ namespace CPWE
         //Function provided to get a matrix to transform the wind vector to the desired vessel's reference frame
         public static Matrix4x4 GetRefFrame(Vessel v)
         {
-            Matrix4x4 frame = Matrix4x4.identity;
-
-            Vector3 east = v.east;
-            Vector3 north = v.north;
-            Vector3 up = v.upAxis;
-
-            frame[0, 2] = east.x;
-            frame[1, 2] = east.y;
-            frame[2, 2] = east.z;
-            frame[0, 1] = up.x;
-            frame[1, 1] = up.y;
-            frame[2, 1] = up.z;
-            frame[0, 0] = north.x;
-            frame[1, 0] = north.y;
-            frame[2, 0] = north.z;
-
-            return frame;
+            Matrix4x4 vesselframe = Matrix4x4.identity;
+            vesselframe.SetColumn(0, (Vector3)v.north);
+            vesselframe.SetColumn(1, (Vector3)v.upAxis);
+            vesselframe.SetColumn(2, (Vector3)v.east);
+            return vesselframe;
         }
 
         //-------------Modify the altitude that the wind vector is retrieved from-------------

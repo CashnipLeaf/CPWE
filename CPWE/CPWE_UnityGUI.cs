@@ -228,6 +228,7 @@ namespace CPWE
                 DrawElement("Wind Vector (World)", appliedwindvec.ToString()); //wind vector after being transformed relative to the craft's frame of reference
                 DrawElement("Wind Vector (Applied to Vessel)", finalwindvec.ToString()); //wind vector after being multiplied by the wind speed multiplier
                 DrawElement("Active Vessel", activevessel.GetDisplayName());
+                DrawElement("World Position", activevessel.GetWorldPos3D().ToString());
                 DrawElement("Drag Vector (World)", craftdragvector.ToString());
                 DrawElement("Drag Vector (Vessel)", craftdragvectortransformed.ToString());
                 DrawElement("Drag Vector + Wind (World)", craftdragvectorwind.ToString());

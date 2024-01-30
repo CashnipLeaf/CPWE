@@ -139,16 +139,29 @@ namespace CPWE
                         if (wing.useInternalDragModel) { DragForceWithWind += wing.GetDragVector(nVel, absdot, Q2); }
                     }
                 }
+                int forcemode = 0;
+                if (PhysicsGlobals.DragUsesAcceleration) { forcemode = 5; }
 
                 //compute the difference in lift/drag with and without wind
                 Vector3 AddedForce = (DragForceWithWind - DragForce) + (LiftForceWithWind - LiftForce);
                 if(!Utils.IsVectorNaNOrInfinity(AddedForce) && AddedForce != Vector3.zero)
                 {
+                    Vector3 position;
+                    if (part.Rigidbody != part.rb)
+                    {
+                        if (PhysicsGlobals.ApplyDragToNonPhysicsPartsAtParentCoM)
+                        {
+                            position = rb.worldCenterOfMass;
+                            goto applyforce;
+                        }
+                    }
+                    position = part.partTransform.TransformPoint(part.CoPOffset);
+                applyforce:
                     //Adapted from FAR - apply a numerical control factor
                     float numericalControlFactor = (float)(part.rb.mass * part.dragVector.magnitude * 0.67 / (AddedForce.magnitude * TimeWarp.fixedDeltaTime));
 
-                    //add the extra force to the part.
-                    part.AddForce(AddedForce * Math.Min(numericalControlFactor, 1));
+                    //add the extra force to the part's center of pressure.
+                    part.Rigidbody.AddForceAtPosition(AddedForce * Math.Min(numericalControlFactor, 1), position, (ForceMode)forcemode);
                 }
             }
         }
