@@ -24,11 +24,12 @@ namespace CPWE
         internal static CPWE_Core core = null;
 
         //Retrieve the current wind vector. CPWE is only active during the FLIGHT scene, so a zero vector will be returned if accessed outside of the FLIGHT scene.
-        public static Vector3 GetWindData(CelestialBody cb, Part p, Vector3 pos)
-        {
-            if (core == null) { return Vector3.zero; }
-            return core.GetCachedWind();
-        }
+        public static Vector3 GetWindData(CelestialBody cb, Part p, Vector3 pos) => GetWindData();
+
+        public static Vector3 GetWindData() => (core != null) ? core.GetCachedWind() : Vector3.zero;
+
+        public static Vector3 GetRawWindData(CelestialBody cb, Part p, Vector3 pos) => GetRawWindData();
+        public static Vector3 GetRawWindData() => (core != null) ? core.GetRawWind() : Vector3.zero;
 
         /*--------------------------EXTERNAL WIND DATA SOURCES--------------------------
          * You can register a mod to supply wind vectors to CPWE, which it will then use in place of any internally stored wind data.
@@ -78,10 +79,7 @@ namespace CPWE
         }
 
         //Alternate if you dont want to include a name for some odd reason.
-        public static bool RegisterGlobalWindData(windDelegate dlg, HasWind hw)
-        {
-            return RegisterGlobalWindData(dlg, hw, unknown);
-        }
+        public static bool RegisterGlobalWindData(windDelegate dlg, HasWind hw) => RegisterGlobalWindData(dlg, hw, unknown);
 
         /// <summary>
         /// Register external wind data for a specific body. CPWE will assume that any mods registering wind data for a given body contain wind data for the entire body. 
@@ -104,10 +102,7 @@ namespace CPWE
         }
 
         //Alternate if you dont want to include a name for some odd reason.
-        public static bool RegisterBodyWindData(string body, windDelegate dlg)
-        {
-            return RegisterBodyWindData(body, dlg, unknown);
-        }
+        public static bool RegisterBodyWindData(string body, windDelegate dlg) => RegisterBodyWindData(body, dlg, unknown);
 
         /// <summary>
         /// Alternate function to register external wind data for multiple bodies in one fell swoop.
@@ -127,23 +122,13 @@ namespace CPWE
         }
 
         //Alternate if you dont want to include a name for some odd reason.
-        public static bool RegisterBodyWindData(List<string> bodies, windDelegate dlg)
-        {
-            return RegisterBodyWindData(bodies, dlg, unknown);
-        }
+        public static bool RegisterBodyWindData(List<string> bodies, windDelegate dlg) => RegisterBodyWindData(bodies, dlg, unknown);
 
         //-------------Retrieve External Wind Data-------------
-        internal static string GetExternalWindSource(CelestialBody cb)
+        internal static string GetExternalWindSource(CelestialBody cb) 
         {
-            if (externalbodydata.ContainsKey(cb.name))
-            {
-                return externalbodydata[cb.name].GetName();
-            }
-            if (hasGlobalWind())
-            {
-                return globalwindname;
-            }
-            return null;
+            if (externalbodydata.ContainsKey(cb.name)) { return externalbodydata[cb.name].GetName(); }
+            return hasGlobalWind() ? globalwindname : null;
         }
 
         internal static Vector3 GetExternalWind(CelestialBody cb, Part p, Vector3 pos)
@@ -166,10 +151,10 @@ namespace CPWE
                 else
                 {
                     externalbodydata[body].invalidcounter = 0;
-                    if (bodywind == null) { return Vector3.zero; }
-                    else { return bodywind; }
+                    return bodywind != null ? bodywind : Vector3.zero;
                 }
             }
+
             if (globalWind != null)
             {
                 Vector3 globalwindvec = globalWind(cb, p, pos);
@@ -187,7 +172,7 @@ namespace CPWE
                 else
                 {
                     globalwindinvalidcounter = 0;
-                    return globalWind(cb, p, pos);
+                    return globalwindvec != null ? globalwindvec : Vector3.zero;
                 }
             }
             return Vector3.zero;
@@ -205,19 +190,12 @@ namespace CPWE
                 this.dlg = dlg;
                 invalidcounter = 0;
             }
-            internal string GetName() { return name; }
-            internal Vector3 GetWind(CelestialBody body, Part part, Vector3 pos) { return dlg(body, part, pos); }
+            internal string GetName() => name;
+            internal Vector3 GetWind(CelestialBody body, Part part, Vector3 pos) => dlg(body, part, pos);
         }
 
         //Function provided to get a matrix to transform the wind vector to the desired vessel's reference frame
-        public static Matrix4x4 GetRefFrame(Vessel v)
-        {
-            Matrix4x4 vesselframe = Matrix4x4.identity;
-            vesselframe.SetColumn(0, (Vector3)v.north);
-            vesselframe.SetColumn(1, (Vector3)v.upAxis);
-            vesselframe.SetColumn(2, (Vector3)v.east);
-            return vesselframe;
-        }
+        public static Matrix4x4 GetRefFrame(Vessel v) => CPWE_Core.GetRefFrame(v);
 
         //-------------Modify the altitude that the wind vector is retrieved from-------------
         public static bool RegisterAltitudeTransformation(altitudeTransform alty)
@@ -234,18 +212,11 @@ namespace CPWE
         {
             if(alttransform == null) { return alt; }
             double newalt = alttransform(alt);
-            if(double.IsNaN(newalt) || double.IsInfinity(newalt))
-            {
-                return alt;
-            }
-            return newalt;
+            return Utils.IsNaNOrInfinity(newalt) ? alt : newalt;
         }
 
         //De-register a mod with CPWE if the mod returns a NaN or Infinity vector three times in a row.
-        internal static void DeRegisterBodyWind(string body)
-        {
-            externalbodydata.Remove(body);
-        }
+        internal static void DeRegisterBodyWind(string body) { externalbodydata.Remove(body); }
         internal static void DeRegisterGlobalWind()
         {
             globalWind = null;

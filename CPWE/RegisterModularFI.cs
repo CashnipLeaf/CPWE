@@ -1,11 +1,10 @@
 ﻿using System;
-using ModularFI;
 using UnityEngine;
+using ModularFI;
 
 namespace CPWE
 {
     [KSPAddon(KSPAddon.Startup.SpaceCentre, true)]
-    [DefaultExecutionOrder(-1)]
     public class RegisterModularFI : MonoBehaviour
     {
         //register the aero update with ModularFI
@@ -14,7 +13,7 @@ namespace CPWE
             Utils.CheckSettings();
 
             //If FAR is installed, do not register the aerodynamics update. Leave the aerodynamics calulations to FAR.
-            if (!Utils.CheckFAR())
+            if (!CheckFAR())
             {
                 Utils.LogInfo("Registering CPWE with ModularFlightIntegrator.");
                 try
@@ -41,10 +40,11 @@ namespace CPWE
             fi.BaseFIUpdateAerodynamics(part);
 
             CPWE_Core CPWEdata = CPWE_Core.Instance;
-            //Failsafes if the core failes to load.
+            //Failsafe if the core fails to load.
             if (CPWEdata == null) { return; }
 
             Vector3 windvec = CPWEdata.GetCachedWind() * Utils.GlobalWindSpeedMultiplier;
+            //Am I just paranoid for including THIS many failsafes?
             if (windvec == null || Utils.IsVectorNaNOrInfinity(windvec) || windvec == Vector3.zero) { return; }
 
             Rigidbody rb = part.rb;
@@ -77,7 +77,7 @@ namespace CPWE
                 {
                     if (m is ModuleLiftingSurface wing)
                     {
-                        if (part.name.Contains("kerbalEVA")) { continue; }
+                        if (part.isKerbalEVA() || part.name.Contains("kerbalEVA")) { continue; }
                         double Q = part.dynamicPressurekPa * 1000.0;
                         wing.SetupCoefficients(wing.part.dragVector, out Vector3 nVel, out Vector3 liftvector, out float liftDot, out float absdot);
                         LiftForce += wing.GetLiftVector(liftvector, liftDot, absdot, Q, machNumber);
@@ -116,7 +116,7 @@ namespace CPWE
                 }
                 part.aerodynamicArea = fi.BaseFICalculateAerodynamicArea(part);
                 double drag = fi.BaseFICalculateDragValue(part) * fi.pseudoReDragMult;
-                if(!double.IsNaN(drag) && drag != 0.0)
+                if(!Utils.IsNaNOrInfinity(drag) && drag != 0.0)
                 {
                     part.dragScalar = (float)(drag * part.dynamicPressurekPa) * PhysicsGlobals.DragMultiplier;
                     DragForceWithWind += -part.dragVectorDir * part.dragScalar;
@@ -132,15 +132,13 @@ namespace CPWE
                 {
                     if (m is ModuleLiftingSurface wing)
                     {
-                        if (part.name.Contains("kerbalEVA")) { continue; }
+                        if (part.isKerbalEVA() || part.name.Contains("kerbalEVA")) { continue; }
                         double Q2 = part.dynamicPressurekPa * 1000.0;
                         wing.SetupCoefficients(WindDragVector, out Vector3 nVel, out Vector3 liftvector, out float liftDot, out float absdot);
                         LiftForceWithWind += wing.GetLiftVector(liftvector, liftDot, absdot, Q2, (float)fi.mach);
                         if (wing.useInternalDragModel) { DragForceWithWind += wing.GetDragVector(nVel, absdot, Q2); }
                     }
                 }
-                int forcemode = 0;
-                if (PhysicsGlobals.DragUsesAcceleration) { forcemode = 5; }
 
                 //compute the difference in lift/drag with and without wind
                 Vector3 AddedForce = (DragForceWithWind - DragForce) + (LiftForceWithWind - LiftForce);
@@ -159,9 +157,10 @@ namespace CPWE
                 applyforce:
                     //Adapted from FAR - apply a numerical control factor
                     float numericalControlFactor = (float)(part.rb.mass * part.dragVector.magnitude * 0.67 / (AddedForce.magnitude * TimeWarp.fixedDeltaTime));
+                    if(Utils.IsNaNOrInfinity(numericalControlFactor)) { return; }
 
                     //add the extra force to the part's center of pressure.
-                    part.Rigidbody.AddForceAtPosition(AddedForce * Math.Min(numericalControlFactor, 1), position, (ForceMode)forcemode);
+                    part.Rigidbody.AddForceAtPosition(AddedForce * Utils.Clamp(numericalControlFactor, 0.0f, 1.0f), position, (ForceMode)Utils.GetForceMode());
                 }
             }
         }
@@ -186,9 +185,37 @@ namespace CPWE
             if(fi.convectiveMachLerp > 0.0)
             {
                 double shocklerp = PhysicsGlobals.MachTemperatureScalar * Math.Pow(DragVector.magnitude, PhysicsGlobals.MachTemperatureVelocityExponent);
-                shock = Mathf.LerpUnclamped((float)shock, (float)shocklerp, (float)fi.convectiveMachLerp);
+                shock = Utils.Lerp((float)shock, (float)shocklerp, (float)fi.convectiveMachLerp);
             }
             return shock * HighLogic.CurrentGame.Parameters.Difficulty.ReentryHeatScale * fi.CurrentMainBody.shockTemperatureMultiplier;
         }*/
+
+        internal  bool CheckFAR() //check if FAR is installed
+        {
+            try
+            {
+                Type FARAtm = null;
+                foreach (var assembly in AssemblyLoader.loadedAssemblies)
+                {
+                    if (assembly.name == "FerramAerospaceResearch")
+                    {
+                        var types = assembly.assembly.GetExportedTypes();
+                        foreach (Type t in types)
+                        {
+                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind")) { FARAtm = t; }
+                            if (t.FullName.Equals("FerramAerospaceResearch.FARAtmosphere")) { FARAtm = t; }
+                        }
+                    }
+                }
+                if (FARAtm != null)
+                {
+                    Utils.LogInfo("FerramAerospaceResearch detected. Aerodynamics calculations will be deferred to FAR.");
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception e) { Utils.LogError("An Exception occurred when checking for FAR's presence. Exception thrown: " + e.ToString()); }
+            return false;
+        }
     }
 }

@@ -1,10 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using KSP.Localization;
-using UnityEngine;
-using ToolbarControl_NS;
-using KSP.UI.Screens;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using KSP.Localization;
+using KSP.UI.Screens;
+using ToolbarControl_NS;
+
 
 namespace CPWE
 {
@@ -76,7 +77,7 @@ namespace CPWE
         {
             if (instance == null)
             {
-                Utils.LogInfo("Initializing GUI");
+                Utils.LogInfo("Initializing GUI.");
                 instance = this;
             }
             else { Destroy(this); }
@@ -97,13 +98,13 @@ namespace CPWE
 
         void FixedUpdate()
         {
-            if(Core == null)
+            if (!FlightGlobals.ready || FlightGlobals.ActiveVessel == null) { return; }
+            if (Core == null)
             {
-                if(CPWE_Core.Instance == null) { return; }
+                if (CPWE_Core.Instance == null) { return; }
                 Core = CPWE_Core.Instance;
             }
             activevessel = FlightGlobals.ActiveVessel;
-            if (activevessel == null) { return; }
 
             //get the first part with a rigidbody (this is almost always the root part, but it never hurts to check)
             foreach (Part p in activevessel.Parts)
@@ -137,6 +138,7 @@ namespace CPWE
             LOCCache.Clear();
             LOCCache = null;
             instance = null;
+            this.Destroy();
             Destroy(this);
         }
 
@@ -216,6 +218,7 @@ namespace CPWE
             {
                 DrawCentered(GetLOC("#LOC_CPWE_noatmo"));
             }
+            GUILayout.FlexibleSpace();
 
             if (Utils.devMode)
             {
@@ -226,7 +229,7 @@ namespace CPWE
                 DrawElement("Wind Speed Multiplier", string.Format("{0:F2}", Utils.GlobalWindSpeedMultiplier));
                 DrawElement("Wind Vector (Vessel)", internalwindvec.ToString()); //wind vector retrieved from the wind objects
                 DrawElement("Wind Vector (World)", appliedwindvec.ToString()); //wind vector after being transformed relative to the craft's frame of reference
-                DrawElement("Wind Vector (Applied to Vessel)", finalwindvec.ToString()); //wind vector after being multiplied by the wind speed multiplier
+                DrawElement("Wind Vector (Applied)", finalwindvec.ToString()); //wind vector after being multiplied by the wind speed multiplier
                 DrawElement("Active Vessel", activevessel.GetDisplayName());
                 DrawElement("World Position", activevessel.GetWorldPos3D().ToString());
                 DrawElement("Drag Vector (World)", craftdragvector.ToString());
@@ -241,7 +244,7 @@ namespace CPWE
 
         internal void UpdateUISizes()
         {
-            xwidth *= GameSettings.UI_SCALE;
+            xwidth *= Math.Min(GameSettings.UI_SCALE, 1.5f);
             yheight *= GameSettings.UI_SCALE;
             xpos *= GameSettings.UI_SCALE;
             ypos *= GameSettings.UI_SCALE;
@@ -334,8 +337,7 @@ namespace CPWE
             if (Utils.minutesforcoords)
             {
                 string[] directions = { "N", "S", "E", "W" };
-                int direction = 2 * axis;
-                if (deg <= 0.0) { direction += 1; }
+                int direction = (deg < 0.0) ? (2 * axis) + 1 : 2 * axis;
                 double minutes = (deg % 1) * 60.0;
                 double seconds = ((deg % 1) * 3600.0) % 60;
                 string degs = string.Format("{0:F0}{1}", Math.Floor(Math.Abs(deg)), Localizer.Format(degreesstr));

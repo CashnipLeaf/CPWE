@@ -7,34 +7,19 @@ namespace CPWE
 {
     internal static class Utils //this class contains a bunch of helper and utility functions
     {
-        internal const string version = "v0.8.3-alpha";
+        internal const string version = "v0.8.4-alpha";
 
         //------------------------------LOGGING FUNCTIONS--------------------------------
-        //General information
-        internal static void LogInfo(string message) 
-        { 
-            Debug.Log("[CPWE][INFO] " + message); 
-        }
-        //API Logging
-        internal static void LogAPI(string message)
-        {
-            Debug.Log("[CPWE][API] " + message);
-        }
-        //If this appears in your log, it usually means a failsafe was tripped.
-        internal static void LogWarning(string message) 
-        { 
-            Debug.LogWarning("[CPWE][WARNING] " + message); 
-        }
-        //Exceptions thrown by other sources.
-        internal static void LogError(string message) 
-        { 
-            Debug.LogError("[CPWE][ERROR] " + message); 
-        }
+        internal static void LogInfo(string message) => Debug.Log("[CPWE][INFO] " + message); //General information
+        internal static void LogAPI(string message) => Debug.Log("[CPWE][API] " + message); //API Logging
+        internal static void LogWarning(string message) => Debug.LogWarning("[CPWE][WARNING] " + message); //If this appears in your log, it usually means a failsafe was tripped.
+        internal static void LogError(string message) => Debug.LogError("[CPWE][ERROR] " + message); //Exceptions thrown by other sources.
 
         //------------------------------SETTINGS AND SETUP--------------------------------
         internal static bool devMode = false;
         internal static bool minutesforcoords = false;
         internal static float GlobalWindSpeedMultiplier = 1.0f;
+        internal static bool FARConnected = false;
 
         //The game's path plus gamedata. Used to locate files in the gamedata folder.
         internal static string gameDataPath = KSPUtil.ApplicationRootPath + "GameData/";
@@ -62,51 +47,8 @@ namespace CPWE
                 }
                 minutesforcoords = mins;
             }
-            catch (Exception e) 
-            { 
-                LogError("An Exception occurred when loading the settings config. Exception thrown: " + e.ToString()); 
-            }
-        }
-
-        //------------------------------FUNCTIONS TO CHECK FOR OTHER MODS-------------------------
-        internal static bool FARConnected = false;
-
-        internal static bool CheckFAR() //check if FAR is installed
-        {
-            try
-            {
-                Type FARAtm = null;
-                foreach (var assembly in AssemblyLoader.loadedAssemblies)
-                {
-                    if (assembly.name == "FerramAerospaceResearch")
-                    {
-                        var types = assembly.assembly.GetExportedTypes();
-                        foreach (Type t in types)
-                        {
-                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind"))
-                            {
-                                FARAtm = t;
-                            }
-                            if (t.FullName.Equals("FerramAerospaceResearch.FARAtmosphere"))
-                            {
-                                FARAtm = t;
-                            }
-                        }
-                    }
-                }
-                if (FARAtm != null)
-                {
-                    LogInfo("FerramAerospaceResearch detected. Aerodynamics calculations will be deferred to FAR.");
-                    return true;
-                }
-                return false;
-            }
-            catch (Exception e)
-            {
-                LogError("An Exception occurred when checking for FAR's presence. Exception thrown: " + e.ToString());
-            }
-            return false;
-        }
+            catch (Exception e) { LogError("An Exception occurred when loading the settings config. Exception thrown: " + e.ToString()); }
+        }  
 
         //------------------------------MATH FUNCTIONS >:3-------------------------
 
@@ -131,12 +73,7 @@ namespace CPWE
             lon2 *= degtorad;
             lat2 *= degtorad;
             double angle = Math.Acos((Math.Sin(lat1) * Math.Sin(lat2)) + (Math.Cos(lat1) * Math.Cos(lat2) * Math.Cos(Math.Abs(lon1 - lon2))));
-
-            if (radians)
-            {
-                return angle;
-            }
-            return angle * radtodeg;
+            return radians ? angle : angle * radtodeg;
         }
 
         /// <summary>
@@ -148,14 +85,11 @@ namespace CPWE
         /// <param name="lat2">The latitude of the second point</param>
         /// <param name="radians">Return the value in radians instead of degrees. default = false</param>
         /// <returns></returns>
-        internal static double RelativeHeading(double lon1, double lat1, double lon2, double lat2,bool radians=false)
+        internal static double RelativeHeading(double lon1, double lat1, double lon2, double lat2, bool radians=false)
         {
             //default to north if the two points are exactly antipodal or exactly on top of each other.
             float dotproduct = Math.Abs(Vector3.Dot(ToCartesian(lon1, lat1), ToCartesian(lon2, lat2)));
-            if (dotproduct == 1.0f) 
-            {
-                return 0.0;
-            }
+            if (dotproduct == 1.0f) { return 0.0; }
 
             //Compute the angle between the north pole and the second point relative to the first point using the spherical law of cosines.
             //Don't worry, this hurt my brain, too. 
@@ -167,15 +101,8 @@ namespace CPWE
 
             //The above function only computes the angle from 0 to 180 degrees, irrespective of east/west direction.
             //This line checks for that direction and modifies the heading accordingly.
-            if (Math.Sin((lon1 - lon2) * degtorad) < 0)
-            {
-                heading *= -1;
-            }
-            if (radians)
-            {
-                return heading;
-            }
-            return heading * radtodeg;
+            if (Math.Sin((lon1 - lon2) * degtorad) < 0) { heading *= -1; }
+            return radians ? heading : heading * radtodeg;
         }
 
         /// <summary>
@@ -198,10 +125,12 @@ namespace CPWE
         /// <param name="fc">The float curve to take the derivative of</param>
         /// <param name="f">The time to take the derivative from</param>
         /// <returns>The derivative of the float curve at the given time value</returns>
-        internal static float FloatCurveDerivative(FloatCurve fc,  float f)
-        {
-            return (fc.Evaluate(f + 0.0001f) - fc.Evaluate(f - 0.0001f))/0.0002f;
-        }
+        internal static float FloatCurveDerivative(FloatCurve fc,  float f) => (fc.Evaluate(f + 0.0001f) - fc.Evaluate(f - 0.0001f)) / 0.0002f;
+
+        //Clamping functions
+        internal static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
+        internal static float Clamp(float value, float min, float max) => Math.Min(Math.Max(value, min), max);
+        internal static double Clamp(double value, double min, double max) => Math.Min(Math.Max(value, min), max);
 
         /// <summary>
         /// Check if val is within the range spanned by v1 and v2
@@ -210,41 +139,13 @@ namespace CPWE
         /// <param name="v1">The first extreme</param>
         /// <param name="v2">The second extreme</param>
         /// <returns>A boolean value indicating that the value is inside the range</returns>
-        internal static bool InRange(double val, double v1, double v2)
-        {
-            if (v1 < v2)
-            {
-                return (val >= v1 && val <= v2);
-            }
-            else
-            {
-                return (val <= v1 && val >= v2);
-            }
-        }
+        internal static bool InRange(double val, double v1, double v2) => (v2 >= v1) ? Clamp(val, v1, v2) == val : Clamp(val, v2, v1) == val;
 
-        /// <summary>
-        /// Lerp between two doubles.
-        /// </summary>
-        /// <param name="first">The first double, returned if by = 0</param>
-        /// <param name="second">The second double, returned if by = 1</param>
-        /// <param name="by">Value used to interpolate between first and second</param>
-        /// <returns></returns>
-        internal static double Lerp(double first, double second, double by)
-        {
-            return (first * (1.0 - by)) + (second * by);
-        }
-
-        /// <summary>
-        /// Lerp between two floats.
-        /// </summary>
-        /// <param name="first">The first float, returned if by = 0</param>
-        /// <param name="second">The second float, returned if by = 1</param>
-        /// <param name="by">Value used to interpolate between first and second</param>
-        /// <returns></returns>
-        internal static float Lerp(float first, float second, float by)
-        {
-            return (first * (1.0f - by)) + (second * by);
-        }
+        //Lerping Functions
+        internal static double Lerp(double first, double second, double by) => (first * (1.0 - by)) + (second * by);
+        internal static float Lerp(float first, float second, float by) => (first * (1.0f - by)) + (second * by);
+        internal static double LerpClamped(double first, double second, double by) => Lerp(first, second, Clamp(by, 0.0, 1.0));
+        internal static float LerpClamped(float first, float second, float by) => Lerp(first, second, Clamp(by, 0.0f, 1.0f));
 
         /// <summary>
         /// Bilinear Interpolation between four points.
@@ -273,17 +174,19 @@ namespace CPWE
         internal static bool IsVectorNaNOrInfinity(Vector3 v)
         {
             List<float> components = new List<float> { v.x, v.y, v.z };
-            return (components.Any(c => float.IsInfinity(c) || float.IsNaN(c)) || float.IsInfinity(v.magnitude) || float.IsNaN(v.magnitude));
+            return (components.Any(c => IsNaNOrInfinity(c)) || IsNaNOrInfinity(v.magnitude));
         }
+
+        internal static bool IsNaNOrInfinity(double d) => double.IsNaN(d) || double.IsInfinity(d);
+        internal static bool IsNaNOrInfinity(float f) => float.IsNaN(f) || float.IsInfinity(f);
 
         /// <summary>
         /// Evaluate the float curve at the time relative to the loop
         /// </summary>
         /// <param name="curve">The float curve to evaluate</param>
         /// <returns></returns>
-        internal static float GetValAtLoopTime(FloatCurve curve)
-        {
-            return curve.Evaluate((float)Planetarium.GetUniversalTime() % curve.maxTime);
-        }
+        internal static float GetValAtLoopTime(FloatCurve curve) => curve.Evaluate((float)Planetarium.GetUniversalTime() % curve.maxTime);
+
+        internal static int GetForceMode() => PhysicsGlobals.DragUsesAcceleration ? 5 : 0;
     }
 }

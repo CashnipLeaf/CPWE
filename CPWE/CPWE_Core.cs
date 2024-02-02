@@ -22,6 +22,7 @@ namespace CPWE
         private Vessel activevessel;
         private Part refpart;
         internal bool haswind;
+        internal Vector3 rawWindVec = Vector3.zero;
         internal Vector3 windVec = Vector3.zero;
         internal string source = "None";
 
@@ -42,8 +43,8 @@ namespace CPWE
 
         void Awake()
         {
-            RegisterWithFAR();
             CPWE_API.core = this;
+            RegisterWithFAR();
 
             //read all the nodes and create the wind objects to be stored in memory
             atmocurrents = new CPWE_Object();
@@ -90,14 +91,8 @@ namespace CPWE
                             Utils.LogInfo("Loading Wind Objects for " + body);
                             foreach (ConfigNode wind in windnodes)
                             {
-                                try
-                                {
-                                    atmocurrents.AddWind(body, ReadWindNode(wind));
-                                }
-                                catch (Exception ex)
-                                {
-                                    Utils.LogWarning("Unable to load Wind object: " + ex.Message);
-                                }
+                                try { atmocurrents.AddWind(body, ReadWindNode(wind)); }
+                                catch (Exception ex) { Utils.LogWarning("Unable to load Wind object: " + ex.Message); }
                             }
                         }
                         //read the flowmap nodes
@@ -106,21 +101,12 @@ namespace CPWE
                             Utils.LogInfo("Loading Flowmap Objects for " + body);
                             foreach (ConfigNode flowmap in flowmaps)
                             {
-                                try
-                                {
-                                    atmocurrents.AddFlowMap(body, ReadFlowMapNode(flowmap));
-                                }
-                                catch (Exception ex)
-                                {
-                                    Utils.LogWarning("Unable to load Flowmap object: " + ex.Message);
-                                }
+                                try { atmocurrents.AddFlowMap(body, ReadFlowMapNode(flowmap)); }
+                                catch (Exception ex) { Utils.LogWarning("Unable to load Flowmap object: " + ex.Message); }
                             }
                         }
                     }
-                    else
-                    {
-                        Utils.LogInfo("Body " + body + " not found.");
-                    }
+                    else { Utils.LogInfo("Body " + body + " not found."); }
                 }
             }
             Utils.LogInfo("All Configs Loaded.");
@@ -132,64 +118,84 @@ namespace CPWE
             haswind = false;
             source = "None";
             windVec = Vector3.zero;
+            rawWindVec = Vector3.zero;
             refpart = null;
 
+            if (!FlightGlobals.ready || FlightGlobals.ActiveVessel == null) { return; }
             activevessel = FlightGlobals.ActiveVessel;
-            if (activevessel == null) { return; }
 
-            //get the first part with a rigidbody (this is almost always the root part, but it never hurts to check)
+            //Get the first part with a rigidbody (this is almost always the root part, but it never hurts to check)
+            //If no such part is found, return.
             foreach (Part p in activevessel.Parts)
             {
-                if (p.rb != null)
-                {
+                if (p.rb != null) 
+                { 
                     refpart = p;
-                    break;
+                    goto GetWind;
                 }
             }
-
+            return;
+        GetWind:
             CelestialBody body = activevessel.mainBody;
             double lon = activevessel.longitude;
             double lat = activevessel.latitude;
             double alt = activevessel.altitude;
             Vector3 worldpos = activevessel.GetWorldPos3D();
+            Matrix4x4 vesselframe = GetRefFrame(activevessel);
 
-            //cache wind vector at each frame
-            if(refpart && refpart.staticPressureAtm > 0.0)
+            //cache wind vector so it only needs to be calculated once per frame.
+            if (refpart && refpart.staticPressureAtm > 0.0)
             {
                 //External Data is currently disabled for the time being
-                /*string bodysource = CPWE_API.GetExternalWindSource(body);
+                string bodysource = CPWE_API.GetExternalWindSource(body);
                 if (!string.IsNullOrEmpty(bodysource))
                 {
                     try
                     {
-                        windVec = CPWE_API.GetExternalWind(body, refpart, refpart.rb.position);
+                        windVec = CPWE_API.GetExternalWind(body, refpart, worldpos);
+                        if (Utils.IsVectorNaNOrInfinity(windVec)) { throw new Exception("External wind data returned a NaN or Infinity vector."); } 
+                        rawWindVec = vesselframe.inverse * windVec;
                         source = bodysource;
                         haswind = true;
                         return;
                     }
-                    catch (Exception e)
-                    {
-                        Utils.LogWarning(e.Message);
-                    }
-                }*/
-                source = "Internal Data";
+                    catch (Exception e) { Utils.LogWarning(e.Message + " Defaulting to a Zero vector."); }
+                }
+
+                windVec = Vector3.zero;
                 if (atmocurrents.HasBody(body.name))
                 {
-                    windVec = atmocurrents.GetWindVector(body.name, lon, lat, alt);
-                    if (Utils.IsVectorNaNOrInfinity(windVec))
+                    rawWindVec = atmocurrents.GetWindVector(body.name, lon, lat, alt);
+                    if (Utils.IsVectorNaNOrInfinity(rawWindVec))
                     {
                         source = "None";
                         Utils.LogWarning("Internal Wind Data returned a NaN or Infinity vector. Defaulting to a Zero vector.");
-                        windVec = Vector3.zero;
                         return;
                     }
-                    windVec = GetRefFrame(activevessel) * windVec;
+                    source = "Internal Data";
+                    windVec = vesselframe * rawWindVec;
                     haswind = true;
                 }
             }
         }
 
-        //get the worldframe of the vessel in question to transform the wind vector to be relative to the worldframe.
+        void OnDestroy()
+        {
+            Utils.LogInfo("Flight Scene has ended. Unloading CPWE.");
+            atmocurrents.Delete();
+            atmocurrents = null;
+            CPWE_API.core = null;
+            Utils.FARConnected = false;
+            instance = null;
+            GC.Collect();
+            Destroy(this);
+        }
+
+        internal Vector3 GetTheWind(CelestialBody body, Part p, Vector3 pos) => windVec * Utils.GlobalWindSpeedMultiplier;
+        internal Vector3 GetCachedWind() => windVec;
+        internal Vector3 GetRawWind() => rawWindVec;
+
+        //Get the worldframe of the vessel in question to transform the wind vector to be relative to the worldframe.
         internal static Matrix4x4 GetRefFrame(Vessel v)
         {
             Matrix4x4 vesselframe = Matrix4x4.identity;
@@ -199,20 +205,6 @@ namespace CPWE
             return vesselframe;
         }
 
-        void OnDestroy()
-        {
-            Utils.LogInfo("Flight Scene has ended. Unloading CPWE.");
-            atmocurrents.Delete();
-            atmocurrents = null;
-            CPWE_API.core = null;
-            instance = null;
-            GC.Collect();
-            Destroy(this);
-        }
-
-        internal Vector3 GetTheWind(CelestialBody body, Part p, Vector3 pos) { return windVec * Utils.GlobalWindSpeedMultiplier; }
-        internal Vector3 GetCachedWind() { return windVec; }
-
         //------------------------------CONFIG INTERPRETERS-------------------------
         /// <summary>
         /// Config node interpreter for all standard wind types. Tries to fetch all possible values that could appear in the corresponding config node, then only inputs the relevant ones to the desired wind object
@@ -221,16 +213,14 @@ namespace CPWE
         /// </summary>
         /// <param name="cn">The Wind ConfigNode to interpret</param>
         /// <returns>The corresponding Wind object based on the data inside the ConfigNode</returns>
-        /// <exception cref="Exception">Throws an exception if the patternType field is empty or is not valid</exception>
+        /// <exception cref="Exception">Throws an exception if the patternType field is empty or is not valid, or if any of the parameters are not valid.</exception>
         internal Wind ReadWindNode(ConfigNode cn)
         {
             string type = "";
             cn.TryGetValue("patternType", ref type);
-            if (string.IsNullOrEmpty(type))
-            {
-                throw new ArgumentNullException("Wind field 'patternType' cannot be empty.");
-            }
+            if (string.IsNullOrEmpty(type)) { throw new ArgumentNullException("Wind field 'patternType' cannot be empty."); }
             type = type.ToLower();
+
             float lon = 0.0f;
             float lat = 0.0f;
             float length = 0.0f;
@@ -251,20 +241,31 @@ namespace CPWE
             cn.TryGetValue("windSpeed", ref windSpeed);
 
             List<float> floats = new List<float> { lon, lat, length, minalt, maxalt, radius, windSpeed };
-            if(floats.Any(f => float.IsNaN(f) || float.IsInfinity(f)))
+            if (floats.Any(f => Utils.IsNaNOrInfinity(f))) { throw new Exception("One or more of the inputted float fields returned NaN or Infinity."); }
+            //You do not get to break my mod, boi. >:3
+            if (minalt >= maxalt) { throw new ArgumentException("maxAlt cannot be less than or equal to minAlt."); }
+
+            float difference = Math.Min(1000.0f, (maxalt - minalt) / 10.0f);
+            if (minalt == 0.0f) { minalt -= difference; }
+            float lowerfade = minalt + difference;
+            float upperfade = maxalt - difference;
+
+            ConfigNode altrange = new ConfigNode();
+            if (cn.TryGetNode("AltitudeRange", ref altrange))
             {
-                throw new Exception("One or more of the inputted float fields returned NaN or Infinity.");
+                altrange.TryGetValue("startStart", ref minalt);
+                altrange.TryGetValue("endEnd", ref maxalt);
+                if (minalt >= maxalt) { throw new ArgumentException("Invalid AltitudeRange Node: endEnd cannot be less than or equal to startStart."); }
+
+                //fallback if these things dont get entered
+                difference = Math.Min(1000.0f, (maxalt - minalt) / 10.0f);
+                if (!altrange.TryGetValue("startEnd", ref lowerfade)) { lowerfade = minalt + difference; }
+                if (!altrange.TryGetValue("endStart", ref upperfade)) { upperfade = maxalt - difference; }
             }
+            //Clamp startEnd and endStart to prevent weird floatcurve shenanigans
+            upperfade = Utils.Clamp(upperfade, minalt + 0.001f, maxalt - 0.001f);
+            lowerfade = Utils.Clamp(lowerfade, minalt + 0.001f, upperfade - 0.001f);
 
-            if(minalt >= maxalt) //You do not get to break my mod, boi. >:3
-            {
-                throw new ArgumentException("Maximum altitude cannot be less than or equal to Minimum altitude.");
-            }
-
-            curveExists = cn.TryGetNode("RadiusCurve", ref FloatCurveHolder); //Width of the current as a function of longitude/latitude. used by jetstream and polarstream
-            FloatCurve RadiusCurve = CheckCurve(FloatCurveHolder, radius, curveExists);
-
-            curveExists = false;
             //curveExists = cn.TryGetNode("LongitudeTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LonTimeCurve = CheckCurve(FloatCurveHolder, lon, curveExists);
 
@@ -273,6 +274,9 @@ namespace CPWE
 
             //curveExists = cn.TryGetNode("WindSpeedTimeCurve", ref FloatCurveHolder); //wind speed as a function of time. used by all wind patterns
             FloatCurve WindSpeedTimeCurve = CheckCurve(FloatCurveHolder, windSpeed, curveExists);
+
+            curveExists = cn.TryGetNode("RadiusCurve", ref FloatCurveHolder); //Width of the current as a function of longitude/latitude. used by jetstream and polarstream
+            FloatCurve RadiusCurve = CheckCurve(FloatCurveHolder, radius, curveExists);
 
             curveExists = cn.TryGetNode("LatitudeCurve", ref FloatCurveHolder); //latitude as a function of longitude. used by jetstream
             FloatCurve LatitudeCurve = CheckCurve(FloatCurveHolder, lat, curveExists);
@@ -287,9 +291,8 @@ namespace CPWE
             FloatCurve RadiusSpeedMultCurve = CreateRadiusSpeedCurve(FloatCurveHolder, curveExists);
 
             curveExists = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref FloatCurveHolder);
-            FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(FloatCurveHolder, curveExists, minalt, maxalt);
+            FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(FloatCurveHolder, curveExists, minalt, maxalt, lowerfade, upperfade);
 
-            FloatCurveHolder = null;
             switch (type)
             {
                 case "jetstream": //defined by wind that flows primarily in the east/west direction
@@ -323,7 +326,7 @@ namespace CPWE
         /// </summary>
         /// <param name="cn">The Flowmap ConfigNode to read</param>
         /// <returns>A Flowmap object</returns>
-        /// <exception cref="Exception">Throws an exception if no flowmap texture is provided or the flowmap texture does not exist.</exception>
+        /// <exception cref="Exception">Throws an exception if no flowmap texture is provided or the flowmap texture does not exist, or if any of the parameters are not valid.</exception>
         internal FlowMap ReadFlowMapNode(ConfigNode cn)
         {
             bool thirdchannel = false;
@@ -347,24 +350,35 @@ namespace CPWE
             if (!cn.TryGetValue("verticalWindSpeed", ref vWind)) { vWind = windSpeed; }
             cn.TryGetValue("map", ref map);
 
+            if (string.IsNullOrEmpty(map)) { throw new ArgumentNullException("Flowmap field 'map' cannot be empty"); }
+            if (!File.Exists(Utils.gameDataPath + map)) { throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct."); }
+
             List<float> floats = new List<float> { minalt, maxalt, windSpeed, EWwind, NSwind, vWind };
-            if (floats.Any(f => float.IsNaN(f) || float.IsInfinity(f)))
+            if (floats.Any(f => Utils.IsNaNOrInfinity(f))) { throw new Exception("One or more of the inputted float fields returned NaN or Infinity."); }
+            //You do not get to break my mod, boi. >:3
+            if (minalt >= maxalt) { throw new ArgumentException("maxAlt cannot be less than or equal to minAlt."); }
+
+            float difference = Math.Min(1000.0f, (maxalt - minalt) / 10.0f);
+            if (minalt == 0.0f) { minalt -= difference; }
+            float lowerfade = minalt + difference;
+            float upperfade = maxalt - difference;
+
+            ConfigNode altrange = new ConfigNode();
+            if (cn.TryGetNode("AltitudeRange", ref altrange))
             {
-                throw new Exception("One or more of the inputted float fields returned NaN or Infinity.");
+                altrange.TryGetValue("startStart", ref minalt);
+                altrange.TryGetValue("endEnd", ref maxalt);
+                if (minalt >= maxalt) { throw new ArgumentException("Invalid AltitudeRange Node: endEnd cannot be less than or equal to startStart."); }
+
+                //fallback if these things dont get entered
+                difference = Math.Min(1000.0f, (maxalt - minalt) / 10.0f);
+                if (!altrange.TryGetValue("startEnd", ref lowerfade)) { lowerfade = minalt + difference; }
+                if (!altrange.TryGetValue("endStart", ref upperfade)) { upperfade = maxalt - difference; }
             }
-            if (minalt >= maxalt) //You do not get to break my mod, boi. >:3
-            {
-                throw new ArgumentException("Maximum altitude cannot be less than or equal to Minimum altitude.");
-            }
-            if (string.IsNullOrEmpty(map))
-            {
-                throw new ArgumentNullException("Flowmap field 'map' cannot be empty");
-            }
-            if (!File.Exists(Utils.gameDataPath + map))
-            {
-                throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct.");
-            }
-            
+            //Clamp startEnd and endStart to prevent weird floatcurve shenanigans
+            upperfade = Utils.Clamp(upperfade, minalt + 0.001f, maxalt - 0.001f);
+            lowerfade = Utils.Clamp(lowerfade, minalt + 0.001f, upperfade - 0.001f);
+
             //curveExists = cn.TryGetNode("NSSpeedTimeCurve", ref floaty);
             FloatCurve EWSpeedTimeCurve = CheckCurve(floaty, EWwind, curveExists);
 
@@ -375,7 +389,7 @@ namespace CPWE
             FloatCurve VSpeedTimeCurve = CheckCurve(floaty, vWind, curveExists);
 
             curveExists = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref floaty);
-            FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(floaty, curveExists, minalt, maxalt);
+            FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(floaty, curveExists, minalt, maxalt, lowerfade, upperfade);
 
             curveExists = cn.TryGetNode("EastWestAltitudeSpeedMultiplierCurve", ref floaty);
             FloatCurve EWAltMult = CheckCurve(floaty, 1.0f, curveExists); ;
@@ -404,26 +418,17 @@ namespace CPWE
             return curve;
         }
 
-        internal FloatCurve CreateAltitudeCurve(ConfigNode node, bool saved, float min, float max)
+        internal FloatCurve CreateAltitudeCurve(ConfigNode node, bool saved, float min, float max, float lowerfade, float upperfade)
         {
             FloatCurve curve = new FloatCurve();
             if (saved) { curve.Load(node); }
             //generate a default AltitudeSpeedMultCurve if one isn't inputted.
             else
             {
-                float fade = Math.Min(1000.0f, (max - min) / 10.0f);
-                if(min <= 0.0f)
-                {
-                    curve.Add(min - fade, 0.0f, 0.0f, 1.0f / fade);
-                    curve.Add(min, 1.0f, 1.0f / fade, 0.0f);
-                }
-                else
-                {
-                    curve.Add(min, 0.0f, 0.0f, 1.0f / fade);
-                    curve.Add(min + fade, 1.0f, 1.0f / fade, 0.0f); 
-                }
-                curve.Add(max - fade, 1.0f, 0.0f, -1.0f / fade);
-                curve.Add(max, 0.0f, -1.0f / fade, 0.0f);
+                curve.Add(min, 0.0f, 0.0f, 1.0f / (lowerfade - min));
+                curve.Add(min + lowerfade, 1.0f, 1.0f / (lowerfade - min), 0.0f);
+                curve.Add(max - upperfade, 1.0f, 0.0f, -1.0f / (max - upperfade));
+                curve.Add(max, 0.0f, -1.0f / (max - upperfade), 0.0f);
             }
             return curve;
         }
@@ -453,10 +458,7 @@ namespace CPWE
                 ImageConversion.LoadImage(tex, fileData);
                 return tex;
             }
-            else
-            {
-                throw new Exception("File at path " + filePath + " not found.");
-            }
+            else { throw new Exception("File at path " + filePath + " not found."); }
         }
 
         //Register CPWE with FAR.
@@ -476,18 +478,9 @@ namespace CPWE
 
                         foreach (Type t in types)
                         {
-                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind"))
-                            {
-                                FARAtm = t;
-                            }
-                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind+WindFunction"))
-                            {
-                                FARWindFunc = t;
-                            }
-                            if (t.FullName.Equals("FerramAerospaceResearch.FARAtmosphere"))
-                            {
-                                FARAtm = t;
-                            }
+                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind")) { FARAtm = t; }
+                            if (t.FullName.Equals("FerramAerospaceResearch.FARWind+WindFunction")) { FARWindFunc = t; }
+                            if (t.FullName.Equals("FerramAerospaceResearch.FARAtmosphere")) { FARAtm = t; }
                         }
                     }
                 }
@@ -520,10 +513,7 @@ namespace CPWE
                 Utils.FARConnected = true;
                 return true;
             }
-            catch (Exception e)
-            {
-                Utils.LogError("An Exception occurred when registering CPWE with FerramAerospaceResearch. Exception thrown: " + e.ToString());
-            }
+            catch (Exception e) { Utils.LogError("An Exception occurred when registering CPWE with FerramAerospaceResearch. Exception thrown: " + e.ToString()); }
             return false;
         }
     }

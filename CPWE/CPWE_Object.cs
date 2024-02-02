@@ -22,7 +22,7 @@ namespace CPWE
             }
         }
 
-        internal bool HasBody(string bod) { return Bodies.ContainsKey(bod); }
+        internal bool HasBody(string bod) => Bodies.ContainsKey(bod);
 
         //X = North, Y = Up, Z = East
         internal Vector3 GetWindVector(string body, double vlon, double vlat, double vheight) => HasBody(body) ? Bodies[body].GetWind(vlon, vlat, vheight) : Vector3.zero;
@@ -30,7 +30,7 @@ namespace CPWE
         internal void AddWind(string body, Wind wnd)
         {
             //check that the CPWE_Body object is present before adding a wind object
-            if (Bodies.ContainsKey(body)) 
+            if (HasBody(body)) 
             { 
                 Bodies[body].AddNewWind(wnd); 
             }
@@ -38,7 +38,7 @@ namespace CPWE
         internal void AddFlowMap(string body, FlowMap flmp)
         {
             //check that the CPWE_Body object is present before adding a flowmap object
-            if (Bodies.ContainsKey(body)) 
+            if (HasBody(body)) 
             { 
                 Bodies[body].AddFlowMap(flmp); 
             }
@@ -47,10 +47,7 @@ namespace CPWE
         //Remove from memory
         internal void Delete()
         {
-            foreach (KeyValuePair<string, CPWE_Body> de in Bodies)
-            {
-                Bodies[de.Key].Delete();
-            }
+            foreach (KeyValuePair<string, CPWE_Body> de in Bodies) { Bodies[de.Key].Delete(); }
             Bodies.Clear();
         }
     }
@@ -71,9 +68,9 @@ namespace CPWE
             scalefactor = scale;
         }
 
-        internal void AddNewWind(Wind wnd) { winds.Add(wnd); }
-        internal void AddFlowMap(FlowMap flmp) { flowmaps.Add(flmp); }
-        
+        internal void AddNewWind(Wind wnd) => winds.Add(wnd);
+        internal void AddFlowMap(FlowMap flmp) => flowmaps.Add(flmp);
+
         internal Vector3 GetWind(double lon, double lat, double alt)
         {
             Vector3 windvec = Vector3.zero;
@@ -231,11 +228,7 @@ namespace CPWE
         {
             double distfraction = Utils.GreatCircleAngle(lon, lat, Utils.GetValAtLoopTime(LonTimeCurve), Utils.GetValAtLoopTime(LatTimeCurve)) / radius;
             float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
-            if (distfraction < 1.0 && speed != 0.0f)
-            {
-                return new Vector3(0.0f, speed, 0.0f);
-            }
-            return Vector3.zero;
+            return (distfraction < 1.0 && speed != 0.0f) ? new Vector3(0.0f, speed, 0.0f) : Vector3.zero;
         }
     }
 
@@ -315,24 +308,18 @@ namespace CPWE
             {
                 //adjust longitude so the center of the map is the prime meridian for the purposes of these calculations
                 lon += 90;
-                if (lon > 180)
-                {
-                    lon -= 360;
-                }
-                if (lon <= -180)
-                {
-                    lon += 360;
-                }
+                if (lon > 180) { lon -= 360; }
+                if (lon <= -180) { lon += 360; }
                 double mapx = ((lon / 360) * x) + (x / 2) - 0.5;
                 double mapy = ((lat / 180) * y) + (y / 2) - 0.5;
-                double lerpx = mapx - Math.Truncate(mapx);
-                double lerpy = mapy - Math.Truncate(mapy);
+                double lerpx = Utils.Clamp(mapx - Math.Truncate(mapx), 0.0, 1.0);
+                double lerpy = Utils.Clamp(mapy - Math.Truncate(mapy), 0.0, 1.0);
 
                 //locate the four nearby points, but don't go over the poles.
                 int leftx = (int)(Math.Truncate(mapx) + x) % x;
-                int topy = Math.Max(0, (int)Math.Truncate(mapy));
+                int topy = Utils.Clamp((int)Math.Truncate(mapy), 0, y - 1);
                 int rightx = (int)(Math.Truncate(mapx) + 1 + x) % x;
-                int bottomy = Math.Min((int)(Math.Truncate(mapy) + 1), y - 1);
+                int bottomy = Utils.Clamp((int)Math.Truncate(mapy) + 1, 0, y - 1);
 
                 Color[] colors = new Color[4];
                 Vector3[] vectors = new Vector3[4];
@@ -360,15 +347,6 @@ namespace CPWE
                 return wind * altmult;
             }
             return Vector3.zero;
-        }
-    }
-
-    //finish this, you dummy
-    internal class FlowMapStack
-    {
-        internal FlowMapStack()
-        {
-
         }
     }
 }
