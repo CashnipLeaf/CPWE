@@ -147,7 +147,7 @@ namespace CPWE
             if (refpart && refpart.staticPressureAtm > 0.0)
             {
                 //External Data is currently disabled for the time being
-                string bodysource = CPWE_API.GetExternalWindSource(body);
+                /*string bodysource = CPWE_API.GetExternalWindSource(body);
                 if (!string.IsNullOrEmpty(bodysource))
                 {
                     try
@@ -160,7 +160,7 @@ namespace CPWE
                         return;
                     }
                     catch (Exception e) { Utils.LogWarning(e.Message + " Defaulting to a Zero vector."); }
-                }
+                }*/
 
                 windVec = Vector3.zero;
                 if (atmocurrents.HasBody(body.name))
