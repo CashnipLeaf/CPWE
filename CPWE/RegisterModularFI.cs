@@ -57,11 +57,7 @@ namespace CPWE
 
                 Vector3 NormalDragVector = rb.velocity + Krakensbane.GetFrameVelocity();
                 Vector3 WindDragVector = NormalDragVector - windvec;
-                float machNumber = 0.0f;
-                if(fi.Vessel.speedOfSound > 0.0f)
-                {
-                    machNumber = NormalDragVector.magnitude / (float)fi.Vessel.speedOfSound;
-                }
+                float machNumber = (fi.Vessel.speedOfSound > 0.0f) ? (NormalDragVector.magnitude / (float)fi.Vessel.speedOfSound) : 0.0f;
 
                 //get body drag/lift force w/o wind
                 if (!part.DragCubes.None)
@@ -160,7 +156,7 @@ namespace CPWE
                     if(Utils.IsNaNOrInfinity(numericalControlFactor)) { return; }
 
                     //add the extra force to the part's center of pressure.
-                    part.Rigidbody.AddForceAtPosition(AddedForce * Utils.Clamp(numericalControlFactor, 0.0f, 1.0f), position, (ForceMode)Utils.GetForceMode());
+                    part.Rigidbody.AddForceAtPosition(AddedForce * Utils.Clamp(numericalControlFactor, 0.0f, 1.0f), position, (ForceMode)(PhysicsGlobals.DragUsesAcceleration ? 5 : 0));
                 }
             }
         }

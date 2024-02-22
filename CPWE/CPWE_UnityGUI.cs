@@ -6,7 +6,6 @@ using KSP.Localization;
 using KSP.UI.Screens;
 using ToolbarControl_NS;
 
-
 namespace CPWE
 {
     //Runs the GUI
@@ -69,6 +68,7 @@ namespace CPWE
         private const string degreesstr = "°";
         private const string minutesstr = "'";
         private const string secondsstr = "″";
+        private static string[] cardinaldirs = { "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" };
 
         //cache for localization tags
         private Dictionary<string, string> LOCCache;
@@ -98,7 +98,10 @@ namespace CPWE
 
         void FixedUpdate()
         {
-            if (!FlightGlobals.ready || FlightGlobals.ActiveVessel == null) { return; }
+            refpart = null;
+            activevessel = null;
+            if (!FlightGlobals.ready) { return; }
+            if (FlightGlobals.ActiveVessel == null) {  return; }
             if (Core == null)
             {
                 if (CPWE_Core.Instance == null) { return; }
@@ -112,10 +115,12 @@ namespace CPWE
                 if (p.rb)
                 {
                     refpart = p;
-                    break;
+                    goto CacheStuff;
                 }
             }
+            return;
 
+        CacheStuff:
             mainbody = activevessel.mainBody;
             worldframe = CPWE_Core.GetRefFrame(activevessel);
             inverseworldframe = worldframe.inverse;
@@ -138,7 +143,7 @@ namespace CPWE
             LOCCache.Clear();
             LOCCache = null;
             instance = null;
-            this.Destroy();
+            Destroy();
             Destroy(this);
         }
 
@@ -231,7 +236,7 @@ namespace CPWE
                 DrawElement("Wind Vector (World)", appliedwindvec.ToString()); //wind vector after being transformed relative to the craft's frame of reference
                 DrawElement("Wind Vector (Applied)", finalwindvec.ToString()); //wind vector after being multiplied by the wind speed multiplier
                 DrawElement("Active Vessel", activevessel.GetDisplayName());
-                DrawElement("World Position", activevessel.GetWorldPos3D().ToString());
+                DrawElement("World Position", activevessel.GetWorldPos3D().ToString("F1"));
                 DrawElement("Drag Vector (World)", craftdragvector.ToString());
                 DrawElement("Drag Vector (Vessel)", craftdragvectortransformed.ToString());
                 DrawElement("Drag Vector + Wind (World)", craftdragvectorwind.ToString());
@@ -306,8 +311,8 @@ namespace CPWE
             }
         }
 
-        private void ToolbarButtonOnTrue() { GUIEnabled = true; }
-        private void ToolbarButtonOnFalse() { GUIEnabled = false; }
+        private void ToolbarButtonOnTrue() => GUIEnabled = true; 
+        private void ToolbarButtonOnFalse() => GUIEnabled = false;
 
         //cache localization tags
         private void CacheLOC()
@@ -351,8 +356,7 @@ namespace CPWE
         internal static string CardinalDirection(double heading)
         {
             int val = (int)((heading / 22.5) + .5);
-            string[] arr = { "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" };
-            return arr[val % 16];
+            return cardinaldirs[val % 16];
         }
 
         void Destroy()

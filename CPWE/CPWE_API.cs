@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace CPWE
@@ -18,7 +17,8 @@ namespace CPWE
         internal static HasWind hasGlobalWind = null;
         internal static string globalwindname = "";
         internal static int globalwindinvalidcounter = 0;
-        internal static Dictionary<string, BodyWindData> externalbodydata = new Dictionary<string, BodyWindData>();
+        internal static bool registeredexternalbodydata = false;
+        internal static Dictionary<string, BodyWindData> externalbodydata;
         internal const string unknown = "Unidentified Mod";
 
         internal static CPWE_Core core = null;
@@ -91,6 +91,11 @@ namespace CPWE
         /// <returns>true if registration was successful, false if another mod has already registered wind data for that body.</returns>
         public static bool RegisterBodyWindData(string body, windDelegate dlg, string name)
         {
+            if (!registeredexternalbodydata)
+            {
+                externalbodydata = new Dictionary<string, BodyWindData>();
+                registeredexternalbodydata = true;
+            }
             if (externalbodydata.ContainsKey(body)) 
             {
                 Utils.LogAPI("Could not register " + name + " as a Wind Data source for the Celestial Body" + body + ". Another mod has already registered.");
@@ -113,12 +118,12 @@ namespace CPWE
         /// <returns>true if registration was successful for all bodies, false if another mod has already registered wind data for at least one body in the list.</returns>
         public static bool RegisterBodyWindData(List<string> bodies, windDelegate dlg, string name)
         {
-            List<bool> allregistered = new List<bool>();
+            bool allregistered = true;
             foreach(string body in bodies)
             {
-                allregistered.Add(RegisterBodyWindData(body, dlg, name));
+                if(!RegisterBodyWindData(body, dlg, name)) { allregistered = false; }
             }
-            return allregistered.All(b => b == true);
+            return allregistered;
         }
 
         //Alternate if you dont want to include a name for some odd reason.
@@ -127,31 +132,40 @@ namespace CPWE
         //-------------Retrieve External Wind Data-------------
         internal static string GetExternalWindSource(CelestialBody cb) 
         {
-            if (externalbodydata.ContainsKey(cb.name)) { return externalbodydata[cb.name].GetName(); }
+            if (registeredexternalbodydata) 
+            {
+                if (externalbodydata.ContainsKey(cb.name))
+                {
+                    return externalbodydata[cb.name].Name;
+                }
+            }
             return hasGlobalWind() ? globalwindname : null;
         }
 
         internal static Vector3 GetExternalWind(CelestialBody cb, Part p, Vector3 pos)
         {
             string body = cb.name;
-            if (externalbodydata.ContainsKey(body))
+            if (registeredexternalbodydata)
             {
-                Vector3 bodywind = externalbodydata[body].GetWind(cb, p, pos);
-                if (Utils.IsVectorNaNOrInfinity(bodywind))
+                if (externalbodydata.ContainsKey(body))
                 {
-                    externalbodydata[body].invalidcounter += 1;
-                    if (externalbodydata[body].invalidcounter >= 3)
+                    Vector3 bodywind = externalbodydata[body].GetWind(cb, p, pos);
+                    if (Utils.IsVectorNaNOrInfinity(bodywind))
                     {
-                        string copyname = string.Copy(externalbodydata[body].GetName());
-                        DeRegisterBodyWind(body);
-                        throw new Exception("CPWE has de-registered " + copyname + " as a source of wind data for " + body + " as it has returned three consecutive NaN or Infinity wind vectors.");
+                        externalbodydata[body].invalidcounter += 1;
+                        if (externalbodydata[body].invalidcounter >= 3)
+                        {
+                            string copyname = string.Copy(externalbodydata[body].Name);
+                            externalbodydata.Remove(body);
+                            throw new Exception("CPWE has de-registered " + copyname + " as a source of wind data for " + body + " as it has returned three consecutive NaN or Infinity wind vectors.");
+                        }
+                        throw new Exception(externalbodydata[body].Name + " returned a NaN or Infinity wind vector for " + body + ".");
                     }
-                    throw new Exception(externalbodydata[body].GetName() + " returned a NaN or Infinity wind vector for " + body + ".");
-                }
-                else
-                {
-                    externalbodydata[body].invalidcounter = 0;
-                    return bodywind != null ? bodywind : Vector3.zero;
+                    else
+                    {
+                        externalbodydata[body].invalidcounter = 0;
+                        return bodywind != null ? bodywind : Vector3.zero;
+                    }
                 }
             }
 
@@ -164,7 +178,10 @@ namespace CPWE
                     if (globalwindinvalidcounter >= 3)
                     {
                         string copyname = string.Copy(globalwindname);
-                        DeRegisterGlobalWind();
+                        globalWind = null;
+                        globalwindinvalidcounter = 0;
+                        globalwindname = null;
+                        hasGlobalWind = null;
                         throw new Exception("CPWE has de-registered " + copyname + " as a source of global wind data as it has returned three consecutive NaN or Infinity wind vectors.");
                     }
                     throw new Exception(globalwindname + " returned a NaN or Infinity wind vector.");
@@ -190,7 +207,7 @@ namespace CPWE
                 this.dlg = dlg;
                 invalidcounter = 0;
             }
-            internal string GetName() => name;
+            internal string Name { get { return name; } }
             internal Vector3 GetWind(CelestialBody body, Part part, Vector3 pos) => dlg(body, part, pos);
         }
 
@@ -213,16 +230,6 @@ namespace CPWE
             if(alttransform == null) { return alt; }
             double newalt = alttransform(alt);
             return Utils.IsNaNOrInfinity(newalt) ? alt : newalt;
-        }
-
-        //De-register a mod with CPWE if the mod returns a NaN or Infinity vector three times in a row.
-        internal static void DeRegisterBodyWind(string body) { externalbodydata.Remove(body); }
-        internal static void DeRegisterGlobalWind()
-        {
-            globalWind = null;
-            globalwindinvalidcounter = 0;
-            globalwindname = null;
-            hasGlobalWind = null;
         }
     }
 }

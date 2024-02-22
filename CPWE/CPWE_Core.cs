@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
@@ -32,7 +30,7 @@ namespace CPWE
             if (instance == null)
             {
                 instance = this;
-                Utils.LogInfo("Initializing CPWE Core.");
+                Utils.LogInfo("Initializing Core Program.");
             }
             else
             {
@@ -147,20 +145,22 @@ namespace CPWE
             if (refpart && refpart.staticPressureAtm > 0.0)
             {
                 //External Data is currently disabled for the time being
-                /*string bodysource = CPWE_API.GetExternalWindSource(body);
-                if (!string.IsNullOrEmpty(bodysource))
+                /*try
                 {
-                    try
+                    string bodysource = CPWE_API.GetExternalWindSource(body);
+                    if (!string.IsNullOrEmpty(bodysource))
                     {
                         windVec = CPWE_API.GetExternalWind(body, refpart, worldpos);
-                        if (Utils.IsVectorNaNOrInfinity(windVec)) { throw new Exception("External wind data returned a NaN or Infinity vector."); } 
+                        if (Utils.IsVectorNaNOrInfinity(windVec)) { throw new Exception("External wind data returned a NaN or Infinity vector."); }
                         rawWindVec = vesselframe.inverse * windVec;
                         source = bodysource;
                         haswind = true;
                         return;
+
                     }
-                    catch (Exception e) { Utils.LogWarning(e.Message + " Defaulting to a Zero vector."); }
-                }*/
+                }
+                catch (Exception e) { Utils.LogWarning(e.Message + " Defaulting to a Zero vector."); }
+                */
 
                 windVec = Vector3.zero;
                 if (atmocurrents.HasBody(body.name))
@@ -168,8 +168,9 @@ namespace CPWE
                     rawWindVec = atmocurrents.GetWindVector(body.name, lon, lat, alt);
                     if (Utils.IsVectorNaNOrInfinity(rawWindVec))
                     {
-                        source = "None";
                         Utils.LogWarning("Internal Wind Data returned a NaN or Infinity vector. Defaulting to a Zero vector.");
+                        source = "None";
+                        rawWindVec = Vector3.zero;
                         return;
                     }
                     source = "Internal Data";
@@ -228,7 +229,7 @@ namespace CPWE
             float maxalt = 1000000000.0f; //1Gm. If you somehow have an atmosphere taller than this, you need professional help.
             float radius = 0.0f;
             float windSpeed = 0.0f;
-            bool curveExists = false;
+            bool curveExists;
 
             ConfigNode FloatCurveHolder = new ConfigNode(); //used to hold float curve nodes for processing
 
@@ -240,8 +241,6 @@ namespace CPWE
             cn.TryGetValue("radius", ref radius);
             cn.TryGetValue("windSpeed", ref windSpeed);
 
-            List<float> floats = new List<float> { lon, lat, length, minalt, maxalt, radius, windSpeed };
-            if (floats.Any(f => Utils.IsNaNOrInfinity(f))) { throw new Exception("One or more of the inputted float fields returned NaN or Infinity."); }
             //You do not get to break my mod, boi. >:3
             if (minalt >= maxalt) { throw new ArgumentException("maxAlt cannot be less than or equal to minAlt."); }
 
@@ -266,14 +265,16 @@ namespace CPWE
             upperfade = Utils.Clamp(upperfade, minalt + 0.001f, maxalt - 0.001f);
             lowerfade = Utils.Clamp(lowerfade, minalt + 0.001f, upperfade - 0.001f);
 
-            //curveExists = cn.TryGetNode("LongitudeTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
+
+
+            curveExists = cn.TryGetNode("LongitudeTimeCurve", ref FloatCurveHolder); //longitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LonTimeCurve = CheckCurve(FloatCurveHolder, lon, curveExists);
 
-            //curveExists = cn.TryGetNode("LatitudeTimeCurve", ref FloatCurveHolder); //latitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
+            curveExists = cn.TryGetNode("LatitudeTimeCurve", ref FloatCurveHolder); //latitude of the center of the current as a function of time. used by vortex, up/downdraft, and converging/diverging
             FloatCurve LatTimeCurve = CheckCurve(FloatCurveHolder, lat, curveExists);
 
-            //curveExists = cn.TryGetNode("WindSpeedTimeCurve", ref FloatCurveHolder); //wind speed as a function of time. used by all wind patterns
-            FloatCurve WindSpeedTimeCurve = CheckCurve(FloatCurveHolder, windSpeed, curveExists);
+            curveExists = cn.TryGetNode("TimeSpeedMultiplierCurve", ref FloatCurveHolder); //wind speed as a function of time. used by all wind patterns
+            FloatCurve WindSpeedMultTimeCurve = CheckCurve(FloatCurveHolder, 1.0f, curveExists);
 
             curveExists = cn.TryGetNode("RadiusCurve", ref FloatCurveHolder); //Width of the current as a function of longitude/latitude. used by jetstream and polarstream
             FloatCurve RadiusCurve = CheckCurve(FloatCurveHolder, radius, curveExists);
@@ -296,25 +297,25 @@ namespace CPWE
             switch (type)
             {
                 case "jetstream": //defined by wind that flows primarily in the east/west direction
-                    return new JetStream(lon, length, RadiusCurve, LatitudeCurve, WindSpeedTimeCurve, LonLatSpeedMultCurve, RadiusSpeedMultCurve, AltitudeSpeedMultCurve);
+                    return new JetStream(windSpeed, lon, length, RadiusCurve, LatitudeCurve, WindSpeedMultTimeCurve, LonLatSpeedMultCurve, RadiusSpeedMultCurve, AltitudeSpeedMultCurve);
 
                 case "polarstream": //defined by wind that flows primarily in the north/south direction
-                    return new PolarStream(lat, length,  RadiusCurve, LongitudeCurve, WindSpeedTimeCurve, LonLatSpeedMultCurve, RadiusSpeedMultCurve, AltitudeSpeedMultCurve);
+                    return new PolarStream(windSpeed, lat, length,  RadiusCurve, LongitudeCurve, WindSpeedMultTimeCurve, LonLatSpeedMultCurve, RadiusSpeedMultCurve, AltitudeSpeedMultCurve);
 
                 case "vortex": //defined by a circular wind pattern around the center.
-                    return new Vortex(radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedTimeCurve, AltitudeSpeedMultCurve);
+                    return new Vortex(windSpeed, radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedMultTimeCurve, AltitudeSpeedMultCurve);
 
                 case "updraft": //defined by an up/down wind pattern
-                    return new Updraft(radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedTimeCurve, AltitudeSpeedMultCurve);
+                    return new Updraft(windSpeed, radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedMultTimeCurve, AltitudeSpeedMultCurve);
 
                 case "downdraft": //alt for updraft
-                    return new Updraft(radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedTimeCurve, AltitudeSpeedMultCurve);
+                    return new Updraft(windSpeed, radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedMultTimeCurve, AltitudeSpeedMultCurve);
 
                 case "converging": //defined by winds that converge towards or diverge away from the center
-                    return new ConvergingWind(radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedTimeCurve, AltitudeSpeedMultCurve);
+                    return new ConvergingWind(windSpeed, radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedMultTimeCurve, AltitudeSpeedMultCurve);
 
                 case "diverging": //alt for converging
-                    return new ConvergingWind(radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedTimeCurve, AltitudeSpeedMultCurve);
+                    return new ConvergingWind(windSpeed, radius, RadiusSpeedMultCurve, LonTimeCurve, LatTimeCurve, WindSpeedMultTimeCurve, AltitudeSpeedMultCurve);
 
                 default: //defined by the user not entering a valid wind pattern into the "patternType" field and the plugin going "nope"
                     throw new ArgumentException(type + " is not a valid wind pattern.");
@@ -337,7 +338,7 @@ namespace CPWE
             float NSwind = 0.0f;
             float vWind = 0.0f;
             string map = "";
-            bool curveExists = false;
+            bool curveExists;
 
             ConfigNode floaty = new ConfigNode();
 
@@ -351,10 +352,8 @@ namespace CPWE
             cn.TryGetValue("map", ref map);
 
             if (string.IsNullOrEmpty(map)) { throw new ArgumentNullException("Flowmap field 'map' cannot be empty"); }
-            if (!File.Exists(Utils.gameDataPath + map)) { throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct."); }
+            if (!File.Exists(Utils.GameDataPath + map)) { throw new NullReferenceException("Could not locate Flowmap at file path: " + map + " . Verify that the given file path is correct."); }
 
-            List<float> floats = new List<float> { minalt, maxalt, windSpeed, EWwind, NSwind, vWind };
-            if (floats.Any(f => Utils.IsNaNOrInfinity(f))) { throw new Exception("One or more of the inputted float fields returned NaN or Infinity."); }
             //You do not get to break my mod, boi. >:3
             if (minalt >= maxalt) { throw new ArgumentException("maxAlt cannot be less than or equal to minAlt."); }
 
@@ -379,14 +378,8 @@ namespace CPWE
             upperfade = Utils.Clamp(upperfade, minalt + 0.001f, maxalt - 0.001f);
             lowerfade = Utils.Clamp(lowerfade, minalt + 0.001f, upperfade - 0.001f);
 
-            //curveExists = cn.TryGetNode("NSSpeedTimeCurve", ref floaty);
-            FloatCurve EWSpeedTimeCurve = CheckCurve(floaty, EWwind, curveExists);
-
-            //curveExists = cn.TryGetNode("EWSpeedTimeCurve", ref floaty);
-            FloatCurve NSSpeedTimeCurve = CheckCurve(floaty, NSwind, curveExists);
-
-            //curveExists = cn.TryGetNode("VerticalSpeedTimeCurve", ref floaty);
-            FloatCurve VSpeedTimeCurve = CheckCurve(floaty, vWind, curveExists);
+            curveExists = cn.TryGetNode("TimeSpeedMultiplierCurve", ref floaty);
+            FloatCurve WindSpeedMultTimeCurve = CheckCurve(floaty, 1.0f, curveExists);
 
             curveExists = cn.TryGetNode("AltitudeSpeedMultiplierCurve", ref floaty);
             FloatCurve AltitudeSpeedMultCurve = CreateAltitudeCurve(floaty, curveExists, minalt, maxalt, lowerfade, upperfade);
@@ -400,8 +393,8 @@ namespace CPWE
             curveExists = cn.TryGetNode("VerticalAltitudeSpeedMultiplierCurve", ref floaty);
             FloatCurve VertAltMult = CheckCurve(floaty, 1.0f, curveExists);
 
-            Texture2D flowmap = LoadTexFromImage(Utils.gameDataPath + map);
-            return new FlowMap(flowmap, thirdchannel, AltitudeSpeedMultCurve, EWAltMult, NSAltMult, VertAltMult, EWSpeedTimeCurve, NSSpeedTimeCurve, VSpeedTimeCurve);
+            Texture2D flowmap = LoadTexFromImage(Utils.GameDataPath + map);
+            return new FlowMap(flowmap, thirdchannel, AltitudeSpeedMultCurve, EWAltMult, NSAltMult, VertAltMult, EWwind, NSwind, vWind, WindSpeedMultTimeCurve);
         }
 
         //Creates the float curve, or if one isnt available, converts a relevant float value into one.
@@ -411,7 +404,6 @@ namespace CPWE
             if (saved) { curve.Load(node); }
             else
             {
-                curve.Add(-10000, backup, 0, 0);
                 curve.Add(0, backup, 0, 0);
                 curve.Add(10000, backup, 0, 0);
             }
@@ -422,7 +414,7 @@ namespace CPWE
         {
             FloatCurve curve = new FloatCurve();
             if (saved) { curve.Load(node); }
-            //generate a default AltitudeSpeedMultCurve if one isn't inputted.
+            //generate a default AltitudeSpeedMultCurve with the inputted fade information.
             else
             {
                 curve.Add(min, 0.0f, 0.0f, 1.0f / (lowerfade - min));
@@ -447,13 +439,31 @@ namespace CPWE
             return curve;
         }
 
+        internal FloatCurve CreateSpeedTimeCurve(ConfigNode node, bool curveexists, bool nodeexists, float interval, float duration, float fadein, float fadeout)
+        {
+            FloatCurve curve = new FloatCurve();
+            if(curveexists) { curve.Load(node); }
+            else if (nodeexists)
+            {
+                curve.Add(0.0f, 0.0f, 0.0f, 1 / fadein);
+                curve.Add(fadein, 1.0f, 1 / fadein, 0.0f);
+                curve.Add(duration - fadeout, 1.0f, 0.0f, -1.0f / fadeout);
+                curve.Add(duration, 0.0f, -1.0f / fadeout, 0.0f);
+                curve.Add(interval, 0.0f, 0.0f, 0.0f);
+            }
+            else
+            {
+                curve.Add(0, 1.0f, 0, 0);
+                curve.Add(1000, 1.0f, 0, 0);
+            }
+            return curve;
+        }
+
         internal Texture2D LoadTexFromImage(string filePath)
         {
-            byte[] fileData;
-
             if (File.Exists(filePath))
             {
-                fileData = File.ReadAllBytes(filePath);
+                byte[] fileData = File.ReadAllBytes(filePath);
                 Texture2D tex = new Texture2D(2, 2);
                 ImageConversion.LoadImage(tex, fileData);
                 return tex;

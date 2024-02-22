@@ -16,10 +16,7 @@ namespace CPWE
         //add a new body to the list if said body hasn't already been added. Prevents duplicate keys from being entered.
         internal void AddBody(string body, double scalefactor)
         {
-            if (!HasBody(body)) 
-            { 
-                Bodies.Add(body, new CPWE_Body(body, scalefactor)); 
-            }
+            if (!HasBody(body)) { Bodies.Add(body, new CPWE_Body(body, scalefactor)); }
         }
 
         internal bool HasBody(string bod) => Bodies.ContainsKey(bod);
@@ -30,18 +27,12 @@ namespace CPWE
         internal void AddWind(string body, Wind wnd)
         {
             //check that the CPWE_Body object is present before adding a wind object
-            if (HasBody(body)) 
-            { 
-                Bodies[body].AddNewWind(wnd); 
-            }
+            if (HasBody(body)) { Bodies[body].AddNewWind(wnd); }
         }
         internal void AddFlowMap(string body, FlowMap flmp)
         {
             //check that the CPWE_Body object is present before adding a flowmap object
-            if (HasBody(body)) 
-            { 
-                Bodies[body].AddFlowMap(flmp); 
-            }
+            if (HasBody(body)) { Bodies[body].AddFlowMap(flmp); }
         }
 
         //Remove from memory
@@ -104,8 +95,9 @@ namespace CPWE
     internal abstract class Wind //basic structure for wind objects
     {
         internal float radius;
+        internal float windSpeed;
         internal FloatCurve RadiusSpeedMultCurve;
-        internal FloatCurve WindSpeedTimeCurve;
+        internal FloatCurve WindSpeedTimeMultCurve;
         internal FloatCurve AltitudeSpeedMultCurve;
 
         internal abstract Vector3 GetWindVec(double lon, double lat, double alt);
@@ -119,14 +111,15 @@ namespace CPWE
         internal FloatCurve LatitudeCurve;
         internal FloatCurve LonLatSpeedMultCurve;
 
-        internal JetStream(float lon, float len, FloatCurve radcurve, FloatCurve latcurve, FloatCurve speedCurve, FloatCurve lonlatmult, FloatCurve radmult, FloatCurve altmult)
+        internal JetStream(float speed, float lon, float len, FloatCurve radcurve, FloatCurve latcurve, FloatCurve speedCurve, FloatCurve lonlatmult, FloatCurve radmult, FloatCurve altmult)
         {
+            windSpeed = speed;
             longitude = lon;
             length = len;
             RadiusCurve = radcurve;
             LatitudeCurve = latcurve;
             LonLatSpeedMultCurve = lonlatmult;
-            WindSpeedTimeCurve = speedCurve;
+            WindSpeedTimeMultCurve = speedCurve;
             RadiusSpeedMultCurve = radmult;
             AltitudeSpeedMultCurve = altmult;
         }
@@ -134,12 +127,12 @@ namespace CPWE
         internal override Vector3 GetWindVec(double lon, double lat, double alt)
         {
             double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LatitudeCurve.Evaluate((float)lat), lat) / Math.Max(RadiusCurve.Evaluate((float)lon), 0.0f);
-            float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
-            if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, longitude, longitude + length)) && speed != 0.0f)
+            float speedmult = Utils.GetValAtLoopTime(WindSpeedTimeMultCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
+            if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, longitude, longitude + length)) && speedmult != 0.0f)
             {
                 Vector3 windvec = new Vector3(Utils.FloatCurveDerivative(LatitudeCurve, (float)lat), 0.0f, 1.0f);
                 windvec.Normalize();
-                return windvec * speed;
+                return windvec * speedmult * windSpeed;
             }
             return Vector3.zero;
         }
@@ -153,14 +146,15 @@ namespace CPWE
         internal FloatCurve LongitudeCurve;
         internal FloatCurve LonLatSpeedMultCurve;
 
-        internal PolarStream(float lat, float len, FloatCurve radcurve, FloatCurve loncurve, FloatCurve speedCurve, FloatCurve lonlatmult, FloatCurve radmult, FloatCurve altmult)
+        internal PolarStream(float speed, float lat, float len, FloatCurve radcurve, FloatCurve loncurve, FloatCurve speedCurve, FloatCurve lonlatmult, FloatCurve radmult, FloatCurve altmult)
         {
+            windSpeed = speed;
             latitude = lat;
             length = len;
             RadiusCurve = radcurve;
             LongitudeCurve = loncurve;
             LonLatSpeedMultCurve = lonlatmult;
-            WindSpeedTimeCurve = speedCurve;
+            WindSpeedTimeMultCurve = speedCurve;
             RadiusSpeedMultCurve = radmult;
             AltitudeSpeedMultCurve = altmult;
         }
@@ -168,12 +162,12 @@ namespace CPWE
         internal override Vector3 GetWindVec(double lon, double lat, double alt)
         {
             double distfraction = Utils.GreatCircleAngle(lon, lat, (double)LongitudeCurve.Evaluate((float)lat), lat) / Math.Max(RadiusCurve.Evaluate((float)lat), 0.0f);
-            float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
-            if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, latitude, latitude + length)) && speed != 0.0f)
+            float speedmult = Utils.GetValAtLoopTime(WindSpeedTimeMultCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * LonLatSpeedMultCurve.Evaluate((float)lon);
+            if (distfraction < 1.0 && (length == 0.0f || Utils.InRange(lat, latitude, latitude + length)) && speedmult != 0.0f)
             {
                 Vector3 windvec = new Vector3(1.0f, 0.0f, Utils.FloatCurveDerivative(LongitudeCurve, (float)lat));
                 windvec.Normalize();
-                return windvec * speed;
+                return windvec * speedmult * windSpeed;
             }
             return Vector3.zero;
         }
@@ -184,13 +178,14 @@ namespace CPWE
         internal FloatCurve LonTimeCurve;
         internal FloatCurve LatTimeCurve;
 
-        internal Vortex(float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
+        internal Vortex(float speed, float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
         {
+            windSpeed = speed;
             radius = rad;
             RadiusSpeedMultCurve = radspdcurve;
             LonTimeCurve = lontime;
             LatTimeCurve = lattime;
-            WindSpeedTimeCurve = speedtime;
+            WindSpeedTimeMultCurve = speedtime;
             AltitudeSpeedMultCurve = altmult;
         }
 
@@ -199,11 +194,11 @@ namespace CPWE
             double lonAtTime = Utils.GetValAtLoopTime(LonTimeCurve);
             double latAtTime = Utils.GetValAtLoopTime(LatTimeCurve);
             double distfraction = Utils.GreatCircleAngle(lon, lat, lonAtTime, latAtTime) / radius;
-            float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
-            if (distfraction < 1.0 && speed != 0.0f)
+            float speedmult = Utils.GetValAtLoopTime(WindSpeedTimeMultCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
+            if (distfraction < 1.0 && speedmult != 0.0f)
             {
                 double heading = Utils.RelativeHeading(lon, lat, lonAtTime, latAtTime, true);
-                return new Vector3((float)Math.Cos(heading), 0.0f, (float)Math.Sin(heading)) * speed;
+                return new Vector3((float)Math.Cos(heading), 0.0f, (float)Math.Sin(heading)) * windSpeed * speedmult;
             }
             return Vector3.zero;
         }
@@ -214,20 +209,21 @@ namespace CPWE
         internal FloatCurve LonTimeCurve;
         internal FloatCurve LatTimeCurve;
 
-        internal Updraft(float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
+        internal Updraft(float speed, float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
         {
+            windSpeed = speed;
             radius = rad;
             RadiusSpeedMultCurve = radspdcurve;
             LonTimeCurve = lontime;
             LatTimeCurve = lattime;
-            WindSpeedTimeCurve = speedtime;
+            WindSpeedTimeMultCurve = speedtime;
             AltitudeSpeedMultCurve = altmult;
         }
 
         internal override Vector3 GetWindVec(double lon, double lat, double alt)
         {
             double distfraction = Utils.GreatCircleAngle(lon, lat, Utils.GetValAtLoopTime(LonTimeCurve), Utils.GetValAtLoopTime(LatTimeCurve)) / radius;
-            float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
+            float speed = Utils.GetValAtLoopTime(WindSpeedTimeMultCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt) * windSpeed;
             return (distfraction < 1.0 && speed != 0.0f) ? new Vector3(0.0f, speed, 0.0f) : Vector3.zero;
         }
     }
@@ -237,13 +233,14 @@ namespace CPWE
         internal FloatCurve LonTimeCurve;
         internal FloatCurve LatTimeCurve;
 
-        internal ConvergingWind(float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
+        internal ConvergingWind(float speed, float rad, FloatCurve radspdcurve, FloatCurve lontime, FloatCurve lattime, FloatCurve speedtime, FloatCurve altmult)
         {
+            windSpeed = speed;
             radius = rad;
             RadiusSpeedMultCurve = radspdcurve;
             LonTimeCurve = lontime;
             LatTimeCurve = lattime;
-            WindSpeedTimeCurve = speedtime;
+            WindSpeedTimeMultCurve = speedtime;
             AltitudeSpeedMultCurve = altmult;
         }
 
@@ -252,11 +249,11 @@ namespace CPWE
             double lonAtTime = Utils.GetValAtLoopTime(LonTimeCurve);
             double latAtTime = Utils.GetValAtLoopTime(LatTimeCurve);
             double distfraction = Utils.GreatCircleAngle(lon, lat, lonAtTime, latAtTime) / radius;
-            float speed = Utils.GetValAtLoopTime(WindSpeedTimeCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
-            if (distfraction < 1.0 && speed != 0.0f)
+            float speedmult = Utils.GetValAtLoopTime(WindSpeedTimeMultCurve) * RadiusSpeedMultCurve.Evaluate((float)distfraction) * AltitudeSpeedMultCurve.Evaluate((float)alt);
+            if (distfraction < 1.0 && speedmult != 0.0f)
             {
                 double heading = Utils.RelativeHeading(lon, lat, lonAtTime, latAtTime, true);
-                return new Vector3((float)Math.Sin(heading), 0.0f, (float)Math.Cos(heading)) * speed;
+                return new Vector3((float)Math.Sin(heading), 0.0f, (float)Math.Cos(heading)) * speedmult * windSpeed;
             }
             return Vector3.zero;
         }
@@ -270,41 +267,39 @@ namespace CPWE
         internal FloatCurve EWAltitudeSpeedMultCurve;
         internal FloatCurve NSAltitudeSpeedMultCurve;
         internal FloatCurve VAltitudeSpeedMultCurve;
-        internal FloatCurve EWwind;
-        internal FloatCurve NSwind;
-        internal FloatCurve vWind;
+        internal FloatCurve WindSpeedMultiplierTimeCurve;
+        internal float EWwind;
+        internal float NSwind;
+        internal float vWind;
 
         internal int x;
         internal int y;
 
-        internal FlowMap(Texture2D path, bool use3rdChannel, FloatCurve altmult, FloatCurve ewaltmultcurve, FloatCurve nsaltmultcurve, FloatCurve valtmultcurve, FloatCurve EWwind, FloatCurve NSwind, FloatCurve vWind)
+        internal FlowMap(Texture2D path, bool use3rdChannel, FloatCurve altmult, FloatCurve ewaltmultcurve, FloatCurve nsaltmultcurve, FloatCurve valtmultcurve, float EWwind, float NSwind, float vWind, FloatCurve speedtimecurve)
         {
             flowmap = path;
             useThirdChannel = use3rdChannel;
             AltitudeSpeedMultCurve = altmult;
             EWAltitudeSpeedMultCurve = ewaltmultcurve;
             NSAltitudeSpeedMultCurve = nsaltmultcurve;
-            VAltitudeSpeedMultCurve= valtmultcurve;
+            VAltitudeSpeedMultCurve = valtmultcurve;
+            WindSpeedMultiplierTimeCurve = speedtimecurve;
             this.EWwind = EWwind;
             this.NSwind = NSwind;
             this.vWind = vWind;
 
-            x = flowmap.width; 
+            x = flowmap.width;
             y = flowmap.height;
         }
 
         //I am concerned enough with memory leaks to include this.
-        internal void Delete()
-        {
-            UnityEngine.Object.Destroy(flowmap);
-            flowmap = null;
-        }
+        internal void Delete() => UnityEngine.Object.Destroy(flowmap);
 
         internal Vector3 GetWindVec(double lon, double lat, double alt)
         {
             //AltitudeSpeedMultiplierCurve cannot go below 0.
-            float altmult = Math.Max(AltitudeSpeedMultCurve.Evaluate((float)alt), 0.0f);
-            if(altmult > 0.0f)
+            float speedmult = Math.Max(AltitudeSpeedMultCurve.Evaluate((float)alt), 0.0f) * Utils.GetValAtLoopTime(WindSpeedMultiplierTimeCurve);
+            if (speedmult > 0.0f)
             {
                 //adjust longitude so the center of the map is the prime meridian for the purposes of these calculations
                 lon += 90;
@@ -331,20 +326,17 @@ namespace CPWE
                 for (int i = 0; i < 4; i++)
                 {
                     Vector3 windvec = Vector3.zero;
-                    float r = colors[i].r;
-                    float g = colors[i].g;
-                    float b = colors[i].b;
 
-                    windvec.z = (r * 2.0f) - 1.0f;
-                    windvec.x = (g * 2.0f) - 1.0f;
-                    if (useThirdChannel) { windvec.y = (b * 2.0f) - 1.0f; }
+                    windvec.z = (colors[i].r * 2.0f) - 1.0f;
+                    windvec.x = (colors[i].g * 2.0f) - 1.0f;
+                    windvec.y = useThirdChannel ? (colors[i].b * 2.0f) - 1.0f : 0.0f;
                     vectors[i] = windvec;
                 }
                 Vector3 wind = Utils.BiLerp(vectors[0], vectors[1], vectors[2], vectors[3], (float)lerpx, (float)lerpy);
-                wind.x = wind.x * Utils.GetValAtLoopTime(NSwind) * NSAltitudeSpeedMultCurve.Evaluate((float)alt);
-                wind.y = wind.y * Utils.GetValAtLoopTime(vWind) * VAltitudeSpeedMultCurve.Evaluate((float)alt);
-                wind.z = wind.z * Utils.GetValAtLoopTime(EWwind) * EWAltitudeSpeedMultCurve.Evaluate((float)alt);
-                return wind * altmult;
+                wind.x = wind.x * NSwind * NSAltitudeSpeedMultCurve.Evaluate((float)alt);
+                wind.y = wind.y * vWind * VAltitudeSpeedMultCurve.Evaluate((float)alt);
+                wind.z = wind.z * EWwind * EWAltitudeSpeedMultCurve.Evaluate((float)alt);
+                return wind * speedmult;
             }
             return Vector3.zero;
         }
