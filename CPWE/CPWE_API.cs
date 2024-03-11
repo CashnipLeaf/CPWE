@@ -10,26 +10,26 @@ namespace CPWE
     {
         public delegate Vector3 windDelegate(CelestialBody cb, Part p, Vector3 pos);
         public delegate bool HasWind();
-        public delegate double altitudeTransform(double alt);
 
-        internal static altitudeTransform alttransform = null;
         internal static windDelegate globalWind = null;
         internal static HasWind hasGlobalWind = null;
         internal static string globalwindname = "";
-        internal static int globalwindinvalidcounter = 0;
         internal static bool registeredexternalbodydata = false;
         internal static Dictionary<string, BodyWindData> externalbodydata;
-        internal const string unknown = "Unidentified Mod";
-
-        internal static CPWE_Core core = null;
+        private const string unknown = "Unidentified Mod";
 
         //Retrieve the current wind vector. CPWE is only active during the FLIGHT scene, so a zero vector will be returned if accessed outside of the FLIGHT scene.
-        public static Vector3 GetWindData(CelestialBody cb, Part p, Vector3 pos) => GetWindData();
+        public static Vector3 GetCurrentWindVec(CelestialBody cb, Part p, Vector3 pos) => GetCurrentWindVec();
+        public static Vector3 GetCurrentWindVec() => (HighLogic.LoadedSceneIsFlight && CPWE_Core.Instance != null) ? CPWE_Core.Instance.AppliedWind : Vector3.zero;
 
-        public static Vector3 GetWindData() => (core != null) ? core.GetCachedWind() : Vector3.zero;
+        public static Vector3 GetRawWindVec(CelestialBody cb, Part p, Vector3 pos) => GetRawWindVec();
+        public static Vector3 GetRawWindVec() => (HighLogic.LoadedSceneIsFlight && CPWE_Core.Instance != null) ? CPWE_Core.Instance.RawWind : Vector3.zero;
 
-        public static Vector3 GetRawWindData(CelestialBody cb, Part p, Vector3 pos) => GetRawWindData();
-        public static Vector3 GetRawWindData() => (core != null) ? core.GetRawWind() : Vector3.zero;
+        public static Vector3 GetWindData(string body, double lon, double lat, double alt, double time)
+        {
+            return (CPWE_Data.Instance != null) ? CPWE_Data.Instance.GetWind(body, lon, lat, alt, time) : Vector3.zero;
+        }
+        public static Vector3 GetWindData(CelestialBody body, double lon, double lat, double alt, double time) => GetWindData(body.name, lon, lat, alt, time);
 
         /*--------------------------EXTERNAL WIND DATA SOURCES--------------------------
          * You can register a mod to supply wind vectors to CPWE, which it will then use in place of any internally stored wind data.
@@ -50,7 +50,6 @@ namespace CPWE
          *  
          * Protection against unwanted behavior:
          * If your mod returns a NaN or Infinity wind vector, CPWE will ignore the data from the mod and substitute in its own internal data, or use a zero vector if no internal data is available.
-         * If this happens three times in a row, CPWE will automatically de-register that mod as a failsafe.
          * 
          * NOTE: External Wind Data is currently disabled. It will be enabled in a BETA release.
          */
@@ -70,7 +69,6 @@ namespace CPWE
                 globalWind = dlg;
                 hasGlobalWind = hw;
                 globalwindname = name;
-                globalwindinvalidcounter = 0;
                 Utils.LogAPI(name + " has registered as a Global Wind Data source.");
                 return true;
             }
@@ -134,10 +132,7 @@ namespace CPWE
         {
             if (registeredexternalbodydata) 
             {
-                if (externalbodydata.ContainsKey(cb.name))
-                {
-                    return externalbodydata[cb.name].Name;
-                }
+                if (externalbodydata.ContainsKey(cb.name)) { return externalbodydata[cb.name].Name; }
             }
             return hasGlobalWind() ? globalwindname : null;
         }
@@ -145,52 +140,21 @@ namespace CPWE
         internal static Vector3 GetExternalWind(CelestialBody cb, Part p, Vector3 pos)
         {
             string body = cb.name;
-            if (registeredexternalbodydata)
+            if (registeredexternalbodydata && externalbodydata != null)
             {
                 if (externalbodydata.ContainsKey(body))
                 {
                     Vector3 bodywind = externalbodydata[body].GetWind(cb, p, pos);
-                    if (Utils.IsVectorNaNOrInfinity(bodywind))
-                    {
-                        externalbodydata[body].invalidcounter += 1;
-                        if (externalbodydata[body].invalidcounter >= 3)
-                        {
-                            string copyname = string.Copy(externalbodydata[body].Name);
-                            externalbodydata.Remove(body);
-                            throw new Exception("CPWE has de-registered " + copyname + " as a source of wind data for " + body + " as it has returned three consecutive NaN or Infinity wind vectors.");
-                        }
-                        throw new Exception(externalbodydata[body].Name + " returned a NaN or Infinity wind vector for " + body + ".");
-                    }
-                    else
-                    {
-                        externalbodydata[body].invalidcounter = 0;
-                        return bodywind != null ? bodywind : Vector3.zero;
-                    }
+                    if (Utils.IsVectorNaNOrInfinity(bodywind)) { throw new Exception(externalbodydata[body].Name + " returned a NaN or Infinity wind vector for " + body + "."); }
+                    if (bodywind != null) { return bodywind; }
                 }
             }
 
             if (globalWind != null)
             {
                 Vector3 globalwindvec = globalWind(cb, p, pos);
-                if (Utils.IsVectorNaNOrInfinity(globalwindvec))
-                {
-                    globalwindinvalidcounter += 1;
-                    if (globalwindinvalidcounter >= 3)
-                    {
-                        string copyname = string.Copy(globalwindname);
-                        globalWind = null;
-                        globalwindinvalidcounter = 0;
-                        globalwindname = null;
-                        hasGlobalWind = null;
-                        throw new Exception("CPWE has de-registered " + copyname + " as a source of global wind data as it has returned three consecutive NaN or Infinity wind vectors.");
-                    }
-                    throw new Exception(globalwindname + " returned a NaN or Infinity wind vector.");
-                }
-                else
-                {
-                    globalwindinvalidcounter = 0;
-                    return globalwindvec != null ? globalwindvec : Vector3.zero;
-                }
+                if (Utils.IsVectorNaNOrInfinity(globalwindvec)) { throw new Exception(globalwindname + " returned a NaN or Infinity wind vector."); }
+                return globalwindvec != null ? globalwindvec : Vector3.zero;
             }
             return Vector3.zero;
         }
@@ -199,37 +163,24 @@ namespace CPWE
         {
             internal string name;
             internal windDelegate dlg;
-            internal int invalidcounter;
 
             internal BodyWindData(string name, windDelegate dlg)
             {
                 this.name = name;
                 this.dlg = dlg;
-                invalidcounter = 0;
             }
             internal string Name { get { return name; } }
             internal Vector3 GetWind(CelestialBody body, Part part, Vector3 pos) => dlg(body, part, pos);
         }
 
         //Function provided to get a matrix to transform the wind vector to the desired vessel's reference frame
-        public static Matrix4x4 GetRefFrame(Vessel v) => CPWE_Core.GetRefFrame(v);
-
-        //-------------Modify the altitude that the wind vector is retrieved from-------------
-        public static bool RegisterAltitudeTransformation(altitudeTransform alty)
+        public static Matrix4x4 GetRefFrame(Vessel v)
         {
-            if(alttransform == null)
-            {
-                alttransform = alty;
-                return true;
-            }
-            return false;
-        }
-
-        internal static double TransformAltitude(double alt)
-        {
-            if(alttransform == null) { return alt; }
-            double newalt = alttransform(alt);
-            return Utils.IsNaNOrInfinity(newalt) ? alt : newalt;
+            Matrix4x4 vesselframe = Matrix4x4.identity;
+            vesselframe.SetColumn(0, (Vector3)v.north);
+            vesselframe.SetColumn(1, (Vector3)v.upAxis);
+            vesselframe.SetColumn(2, (Vector3)v.east);
+            return vesselframe;
         }
     }
 }

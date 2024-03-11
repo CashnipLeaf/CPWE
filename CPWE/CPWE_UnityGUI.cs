@@ -10,11 +10,11 @@ namespace CPWE
 {
     //Runs the GUI
     [KSPAddon(KSPAddon.Startup.Flight, false)]
-    [DefaultExecutionOrder(10)] 
+    [DefaultExecutionOrder(12)] 
     public class CPWE_UnityGUI : MonoBehaviour
     {
         private static CPWE_UnityGUI instance;
-        public static CPWE_UnityGUI Instance { get { return instance; } }
+        public static CPWE_UnityGUI Instance => instance;
 
         private ToolbarControl toolbarController;
         private bool toolbarButtonAdded = false;
@@ -68,10 +68,13 @@ namespace CPWE
         private const string degreesstr = "°";
         private const string minutesstr = "'";
         private const string secondsstr = "″";
-        private static string[] cardinaldirs = { "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" };
+        private static readonly string[] cardinaldirs = { "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW" };
 
         //cache for localization tags
         private Dictionary<string, string> LOCCache;
+
+        //if developer mode is enabled, a modified green logo will replace the normal white Logo.
+        internal static string LogoPath => Utils.DevMode ? "CPWE/PluginData/CPWE_Debug" : "CPWE/PluginData/CPWE_Logo";
 
         public CPWE_UnityGUI() //Check for duplicate instances and destroy any that might be present.
         {
@@ -86,7 +89,7 @@ namespace CPWE
         void Start()
         {
             Core = CPWE_Core.Instance;
-            if (Utils.devMode) { xwidth = 345f; }
+            if (Utils.DevMode) { xwidth = 345f; }
             UpdateUISizes();
             AddToolbarButton();
             LOCCache = new Dictionary<string, string>();
@@ -100,8 +103,7 @@ namespace CPWE
         {
             refpart = null;
             activevessel = null;
-            if (!FlightGlobals.ready) { return; }
-            if (FlightGlobals.ActiveVessel == null) {  return; }
+            if (!FlightGlobals.ready || FlightGlobals.ActiveVessel == null) { return; }
             if (Core == null)
             {
                 if (CPWE_Core.Instance == null) { return; }
@@ -112,29 +114,28 @@ namespace CPWE
             //get the first part with a rigidbody (this is almost always the root part, but it never hurts to check)
             foreach (Part p in activevessel.Parts)
             {
-                if (p.rb)
+                if (p.rb != null)
                 {
                     refpart = p;
-                    goto CacheStuff;
+                    break;
                 }
             }
-            return;
+            if (refpart == null) { return; }
 
-        CacheStuff:
             mainbody = activevessel.mainBody;
-            worldframe = CPWE_Core.GetRefFrame(activevessel);
+            worldframe = Core.vesselframe;
             inverseworldframe = worldframe.inverse;
-            
-            haswind = Core.haswind;
-            appliedwindvec = Core.GetCachedWind();
-            internalwindvec = inverseworldframe * appliedwindvec;
-            multipliedwindvec = internalwindvec * Utils.GlobalWindSpeedMultiplier;
-            finalwindvec = appliedwindvec * Utils.GlobalWindSpeedMultiplier;
 
-            craftdragvectorwind = refpart.dragVector;
-            craftdragvector = craftdragvectorwind + finalwindvec;
-            craftdragvectortransformedwind = inverseworldframe * craftdragvectorwind;
+            haswind = Core.HasWind;
+            appliedwindvec = Core.CachedWind;
+            internalwindvec = Core.RawWind;
+            multipliedwindvec = internalwindvec * Utils.GlobalWindSpeedMultiplier;
+            finalwindvec = Core.AppliedWind;
+
+            craftdragvector = refpart.rb.velocity + Krakensbane.GetFrameVelocity();
+            craftdragvectorwind = craftdragvector - finalwindvec;
             craftdragvectortransformed = inverseworldframe * craftdragvector;
+            craftdragvectortransformedwind = inverseworldframe * craftdragvectorwind;
         }
 
         //clear from memory
@@ -144,7 +145,6 @@ namespace CPWE
             LOCCache = null;
             instance = null;
             Destroy();
-            Destroy(this);
         }
 
         void OnGUI()
@@ -209,26 +209,17 @@ namespace CPWE
                         DrawElement(GetLOC("#LOC_CPWE_heading"), windheading);
                         DrawElement(GetLOC("#LOC_CPWE_cardinal"), winddirection);
                     }
-                    else
-                    {
-                        DrawCentered(GetLOC("#LOC_CPWE_nowind"));
-                    }
+                    else { DrawCentered(GetLOC("#LOC_CPWE_nowind")); }
                 }
-                else
-                {
-                    DrawCentered(GetLOC("#LOC_CPWE_outatmo"));
-                }
+                else { DrawCentered(GetLOC("#LOC_CPWE_outatmo")); }
             }
-            else
-            {
-                DrawCentered(GetLOC("#LOC_CPWE_noatmo"));
-            }
+            else { DrawCentered(GetLOC("#LOC_CPWE_noatmo")); }
             GUILayout.FlexibleSpace();
 
-            if (Utils.devMode)
+            if (Utils.DevMode)
             {
                 DrawHeader("Developer Mode Information");
-                DrawElement("Wind Data Source", Core.source); //Data source
+                DrawElement("Wind Data Source", Core.Source); //Data source
                 DrawElement("Connected to FAR", Utils.FARConnected.ToString()); //connected to FAR
                 DrawElement("Body Internal Name", mainbody.name); //internal name of the current celestial body
                 DrawElement("Wind Speed Multiplier", string.Format("{0:F2}", Utils.GlobalWindSpeedMultiplier));
@@ -295,7 +286,7 @@ namespace CPWE
             toolbarController = gameObject.AddComponent<ToolbarControl>();
             if (!toolbarButtonAdded)
             {
-                toolbarController.AddToAllToolbars(ToolbarButtonOnTrue, ToolbarButtonOnFalse, scenes, modID, "991291", DebugPath(), DebugPath(), Localizer.Format(modNAME));
+                toolbarController.AddToAllToolbars(ToolbarButtonOnTrue, ToolbarButtonOnFalse, scenes, modID, "991291", LogoPath, LogoPath, Localizer.Format(modNAME));
                 toolbarButtonAdded = true;
             }
         }
@@ -333,18 +324,15 @@ namespace CPWE
         //retrieve the localization tag.
         internal string GetLOC(string name) => LOCCache.ContainsKey(name) ? LOCCache[name] : name;
 
-        //if developer mode is enabled, a modified green logo will replace the normal white Logo.
-        internal static string DebugPath() => Utils.devMode ? "CPWE/PluginData/CPWE_Debug" : "CPWE/PluginData/CPWE_Logo";
-
         //display the longitude and latitude information as either degrees or degrees, minutes, and seconds + direction
         internal static string DegreesString(double deg, int axis)
         {
-            if (Utils.minutesforcoords)
+            if (Utils.Minutesforcoords)
             {
                 string[] directions = { "N", "S", "E", "W" };
                 int direction = (deg < 0.0) ? (2 * axis) + 1 : 2 * axis;
                 double minutes = (deg % 1) * 60.0;
-                double seconds = ((deg % 1) * 3600.0) % 60;
+                double seconds = ((deg % 1) * 3600.0) % 60.0;
                 string degs = string.Format("{0:F0}{1}", Math.Floor(Math.Abs(deg)), Localizer.Format(degreesstr));
                 string mins = string.Format("{0:F0}{1}", Math.Floor(Math.Abs(minutes)), Localizer.Format(minutesstr));
                 string secs = string.Format("{0:F0}{1}", Math.Floor(Math.Abs(seconds)), Localizer.Format(secondsstr));
